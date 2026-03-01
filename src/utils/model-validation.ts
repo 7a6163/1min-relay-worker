@@ -35,11 +35,15 @@ export async function validateModelAndMessages(
   // Fetch model data once for all checks
   const modelData = await getModelData(env);
 
-  // Validate that the clean model exists
-  const isValid =
-    modelData.chatModelIds.includes(cleanModel) ||
-    modelData.imageModelIds.includes(cleanModel);
-  if (!isValid) {
+  // Validate that the model exists and is a chat model
+  if (!modelData.chatModelIds.includes(cleanModel)) {
+    if (modelData.imageModelIds.includes(cleanModel)) {
+      throw new ValidationError(
+        `Model '${cleanModel}' is an image generation model. Use POST /v1/images/generations instead.`,
+        "model",
+        "model_not_supported",
+      );
+    }
     throw new ModelNotFoundError(cleanModel);
   }
 
