@@ -76,13 +76,15 @@ export class OneMinApiService {
       });
 
       if (!response.ok) {
-        // Log the error for monitoring
+        // Log the error body for debugging (truncated to avoid large log entries)
+        const rawErrorBody = await response.text().catch(() => "(unreadable)");
+        const errorBody = rawErrorBody.slice(0, 500);
         console.error(
           `1min.ai API error: ${response.status} ${response.statusText}`,
           {
             url: apiUrl,
-            hasWebSearch: requestBody.promptObject?.webSearch,
             model: requestBody.model,
+            errorBody,
           },
         );
 

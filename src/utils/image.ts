@@ -42,14 +42,35 @@ export function extractImageFromContent(
   return null;
 }
 
+export interface ImageData {
+  data: ArrayBuffer;
+  mimeType: string;
+}
+
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+};
+
+const SUPPORTED_MIME_TYPES = new Set(Object.keys(MIME_TO_EXT));
+
+export function mimeToExtension(mimeType: string): string {
+  const ext = MIME_TO_EXT[mimeType];
+  if (!ext) {
+    console.warn(`Unsupported MIME type "${mimeType}", defaulting to .png`);
+  }
+  return ext ?? ".png";
+}
+
 /**
- * Processes image URL (base64 or HTTP URL) and returns binary data
- * @param imageUrl - Image URL (base64 or HTTP)
- * @returns Promise<ArrayBuffer> - Binary image data
+ * Processes image URL (base64 or HTTP URL) and returns binary data with MIME type
  */
-export async function processImageUrl(imageUrl: string): Promise<ArrayBuffer> {
+export async function processImageUrl(imageUrl: string): Promise<ImageData> {
   if (imageUrl.startsWith("data:image/")) {
-    // Handle base64 encoded image (any image MIME type)
+    // Extract MIME type from data URI: data:image/jpeg;base64,...
+    const mimeType = /^data:([^;,]+)/.exec(imageUrl)?.[1] ?? "image/png";
     const base64Data = imageUrl.split(",")[1];
     if (!base64Data) {
       throw new Error("Invalid base64 image format");
@@ -60,9 +81,9 @@ export async function processImageUrl(imageUrl: string): Promise<ArrayBuffer> {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    return bytes.buffer;
+    return { data: bytes.buffer, mimeType };
   } else {
-    // Handle HTTP URL (matching Python logic: requests.get().content)
+    // Handle HTTP URL
     const response = await fetch(imageUrl, {
       headers: {
         "User-Agent":
@@ -74,25 +95,29 @@ export async function processImageUrl(imageUrl: string): Promise<ArrayBuffer> {
         `Failed to fetch image: ${response.status} ${response.statusText}`,
       );
     }
-    return await response.arrayBuffer();
+    const rawMime = response.headers.get("content-type")?.split(";")[0]?.trim();
+    const mimeType =
+      rawMime && SUPPORTED_MIME_TYPES.has(rawMime) ? rawMime : "image/png";
+    return { data: await response.arrayBuffer(), mimeType };
   }
 }
 
 /**
  * Uploads image to 1min.ai asset API
- * @param imageData - Binary image data
+ * @param imageData - Image data with binary content and MIME type
  * @param apiKey - API key for authentication
  * @param assetUrl - Asset API URL
  * @returns Promise<string> - Image path from API response
  */
 export async function uploadImageToAsset(
-  imageData: ArrayBuffer,
+  imageData: ImageData,
   apiKey: string,
   assetUrl: string,
 ): Promise<string> {
   const formData = new FormData();
-  const filename = `relay${crypto.randomUUID()}`;
-  const blob = new Blob([imageData], { type: "image/png" });
+  const ext = mimeToExtension(imageData.mimeType);
+  const filename = `relay${crypto.randomUUID()}${ext}`;
+  const blob = new Blob([imageData.data], { type: imageData.mimeType });
 
   formData.append("asset", blob, filename);
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-03-01
+
+### Fixed
+- **Image upload MIME type detection**: `processImageUrl` now returns the detected MIME type alongside binary data instead of always assuming `image/png`
+  - Base64 data URIs: MIME type extracted via regex (`/^data:([^;,]+)/`) from the data URI header
+  - HTTP URLs: MIME type read from the `Content-Type` response header, validated against the supported set (`image/jpeg`, `image/png`, `image/webp`, `image/gif`); falls back to `image/png` for unsupported types
+- **Image upload filename extension**: Uploaded files now include the correct extension (`.jpg`, `.png`, `.webp`, `.gif`) based on the detected MIME type; previously all files were uploaded without an extension, causing 1min.ai to reject them with "file type isn't supported"
+- **Error body logging**: 1min.ai API errors now include the full response body (truncated to 500 chars) in the log, making it easier to diagnose upstream failures
+
 ## [4.0.0] - 2026-02-18
 
 ### Added
