@@ -9,6 +9,7 @@ export * from "./message-processing";
 export * from "./model-parser";
 export * from "./model-validation";
 export * from "./response";
+export * from "./response-input";
 export * from "./sse";
 export * from "./streaming";
 export * from "./tokens";

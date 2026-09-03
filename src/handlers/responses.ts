@@ -9,13 +9,13 @@ import type {
   Message,
   OneMinChatResponse,
   ResponseFormat,
-  ResponseInputItem,
   ResponseRequest,
   ResponsesAPIResponse,
   ResponsesOutputMessage,
 } from "../types";
 import {
   calculateTokens,
+  convertInputToMessages,
   createSuccessResponse,
   estimateInputTokens,
   extractOneMinContent,
@@ -46,7 +46,7 @@ export class ResponseHandler extends BaseTextHandler {
     // Convert input format to messages format
     let messages: Message[];
     if (requestBody.input) {
-      messages = this.convertInputToMessages(
+      messages = convertInputToMessages(
         requestBody.input,
         requestBody.instructions,
       );
@@ -85,44 +85,6 @@ export class ResponseHandler extends BaseTextHandler {
       apiKey,
       webSearchConfig,
     );
-  }
-
-  private convertInputToMessages(
-    input: string | ResponseInputItem[],
-    instructions?: string,
-  ): Message[] {
-    const messages: Message[] = [];
-
-    // Add instructions as system message
-    if (instructions) {
-      messages.push({ role: "system", content: instructions });
-    }
-
-    if (typeof input === "string") {
-      messages.push({ role: "user", content: input });
-    } else {
-      // Array of input items
-      for (const item of input) {
-        if (!item.type || item.type === "message") {
-          const content =
-            typeof item.content === "string"
-              ? item.content
-              : item.content
-                  .filter(
-                    (c): c is typeof c & { text: string } =>
-                      (c.type === "text" ||
-                        c.type === "input_text" ||
-                        c.type === "output_text") &&
-                      !!c.text,
-                  )
-                  .map((c) => c.text)
-                  .join("\n");
-          messages.push({ role: item.role, content });
-        }
-      }
-    }
-
-    return messages;
   }
 
   private async handleNonStreamingResponse(
