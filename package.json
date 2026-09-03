@@ -10,7 +10,8 @@
     "format": "biome check --write src/",
     "lint": "biome lint src/",
     "check": "biome check src/",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "cloudflare",
@@ -27,6 +28,7 @@
     "@types/node": "^24.10.1",
     "@types/service-worker-mock": "^2.0.4",
     "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
     "wrangler": "^4.24.3"
   },
   "dependencies": {
