@@ -14,11 +14,13 @@ import type {
   ResponsesOutputMessage,
 } from "../types";
 import {
+  assertToolsUnsupported,
   calculateTokens,
   convertInputToMessages,
   createSuccessResponse,
   estimateInputTokens,
   extractOneMinContent,
+  extractOneMinUsage,
   ValidationError,
   validateModelAndMessages,
   type WebSearchConfig,
@@ -32,6 +34,8 @@ export class ResponseHandler extends BaseTextHandler {
     requestBody: ResponseRequest,
     apiKey: string,
   ): Promise<Response> {
+    assertToolsUnsupported(requestBody.tools);
+
     // Validate required fields - support both input and messages formats
     if (
       !requestBody.input &&
@@ -112,6 +116,7 @@ export class ResponseHandler extends BaseTextHandler {
       data,
       model,
       responseFormat,
+      enhancedMessages,
     );
     return createSuccessResponse(responsesAPIResponse);
   }
@@ -316,6 +321,7 @@ export class ResponseHandler extends BaseTextHandler {
     data: OneMinChatResponse,
     model: string,
     responseFormat?: ResponseFormat,
+    messages: Message[] = [],
   ): ResponsesAPIResponse {
     let content = extractOneMinContent(data);
 
@@ -335,6 +341,14 @@ export class ResponseHandler extends BaseTextHandler {
 
     const messageId = `msg-${crypto.randomUUID()}`;
 
+    // Prefer the upstream's own accounting (aiRecord.metadata) over a local
+    // estimate; the relay used to read a `usage` field the upstream never
+    // sends, so every response reported zero tokens.
+    const usage = extractOneMinUsage(data);
+    const inputTokens = usage?.promptTokens ?? estimateInputTokens(messages);
+    const outputTokens =
+      usage?.completionTokens ?? calculateTokens(content, model);
+
     return {
       id: `resp-${crypto.randomUUID()}`,
       object: "response",
@@ -351,9 +365,9 @@ export class ResponseHandler extends BaseTextHandler {
       ],
       status: "completed",
       usage: {
-        input_tokens: data.usage?.prompt_tokens || 0,
-        output_tokens: data.usage?.completion_tokens || 0,
-        total_tokens: data.usage?.total_tokens || 0,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        total_tokens: usage?.totalTokens ?? inputTokens + outputTokens,
       },
     };
   }

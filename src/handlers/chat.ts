@@ -10,8 +10,12 @@ import type {
   OneMinChatResponse,
 } from "../types";
 import {
+  assertToolsUnsupported,
+  calculateTokens,
   createSuccessResponse,
+  estimateInputTokens,
   extractOneMinContent,
+  extractOneMinUsage,
   ValidationError,
   validateModelAndMessages,
   type WebSearchConfig,
@@ -29,6 +33,8 @@ export class ChatHandler extends BaseTextHandler {
     requestBody: ChatCompletionRequest,
     apiKey: string,
   ): Promise<Response> {
+    assertToolsUnsupported(requestBody.tools);
+
     if (!requestBody.messages || !Array.isArray(requestBody.messages)) {
       throw new ValidationError(
         "Messages field is required and must be an array",
@@ -75,7 +81,7 @@ export class ChatHandler extends BaseTextHandler {
       webSearchConfig,
     );
 
-    const openAIResponse = this.transformToOpenAIFormat(data, model);
+    const openAIResponse = this.transformToOpenAIFormat(data, model, messages);
     return createSuccessResponse(openAIResponse);
   }
 
@@ -112,7 +118,17 @@ export class ChatHandler extends BaseTextHandler {
   private transformToOpenAIFormat(
     data: OneMinChatResponse,
     model: string,
+    messages: Message[],
   ): ChatCompletionResponse {
+    const content = extractOneMinContent(data);
+
+    // The upstream reports usage under aiRecord.metadata; fall back to a local
+    // estimate only when it is missing.
+    const usage = extractOneMinUsage(data);
+    const promptTokens = usage?.promptTokens ?? estimateInputTokens(messages);
+    const completionTokens =
+      usage?.completionTokens ?? calculateTokens(content, model);
+
     return {
       id: `chatcmpl-${crypto.randomUUID()}`,
       object: "chat.completion",
@@ -123,15 +139,15 @@ export class ChatHandler extends BaseTextHandler {
           index: 0,
           message: {
             role: "assistant",
-            content: extractOneMinContent(data),
+            content,
           },
-          finish_reason: "stop",
+          finish_reason: usage?.finishReason ?? "stop",
         },
       ],
       usage: {
-        prompt_tokens: data.usage?.prompt_tokens || 0,
-        completion_tokens: data.usage?.completion_tokens || 0,
-        total_tokens: data.usage?.total_tokens || 0,
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: usage?.totalTokens ?? promptTokens + completionTokens,
       },
     };
   }
