@@ -3,6 +3,7 @@
  * Eliminates duplicated TransformStream/reader/writer boilerplate across handlers
  */
 
+import { ApiError } from "./errors";
 import { createSSEResponse } from "./sse";
 import { SimpleUTF8Decoder } from "./utf8-decoder";
 
@@ -29,20 +30,56 @@ function isSSEFormat(text: string): boolean {
   return SSE_LINE_PATTERN.test(text);
 }
 
+export interface ParsedSSEBlock {
+  /** Delta text extracted from `event: content` events. */
+  chunks: string[];
+  /** Message from an `event: error` event, if the upstream reported a failure. */
+  error?: string;
+}
+
 /**
- * Parse SSE content events from 1min.ai streaming response.
- * Only extracts delta text from `event: content` events.
- * Ignores `event: result` (full response) and `event: done` (terminator).
+ * Pull a human-readable message out of an `event: error` data payload.
+ * 1min.ai sends `{"error":"..."}`; be tolerant of other shapes.
+ */
+function extractStreamErrorMessage(dataStr: string): string {
+  try {
+    const parsed = JSON.parse(dataStr) as Record<string, unknown>;
+    if (typeof parsed.error === "string" && parsed.error) {
+      return parsed.error;
+    }
+    if (parsed.error && typeof parsed.error === "object") {
+      const nested = (parsed.error as Record<string, unknown>).message;
+      if (typeof nested === "string" && nested) return nested;
+    }
+    if (typeof parsed.message === "string" && parsed.message) {
+      return parsed.message;
+    }
+  } catch {
+    // Not JSON — fall through and use the raw payload
+  }
+  return dataStr.trim() || "Upstream stream reported an error";
+}
+
+/**
+ * Parse SSE events from a 1min.ai streaming response block.
+ *
+ * Extracts delta text from `event: content`, and surfaces `event: error` so the
+ * caller can abort. The upstream answers a failed streaming request with
+ * HTTP 200 and an `event: error` payload, so treating it as a normal end of
+ * stream would report a truncated (often empty) success to the client.
+ *
+ * `event: result` (full record) and `event: done` (terminator) are ignored.
  * Returns null if no SSE structure was found (caller should use raw text).
  *
  * Issue #6: eventType persists across multiple data lines within the same event block,
  * only reset on empty line or next event: line.
  */
-function parseSSEChunks(text: string): string[] | null {
+export function parseSSEChunks(text: string): ParsedSSEBlock | null {
   const chunks: string[] = [];
   const lines = text.split("\n");
   let hasSSEStructure = false;
   let currentEventType = "";
+  let error: string | undefined;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]?.trim();
@@ -66,7 +103,13 @@ function parseSSEChunks(text: string): string[] | null {
       const dataStr = line.slice(6);
       if (dataStr === "[DONE]") continue;
 
-      // Skip non-content events (result, done, error)
+      // Upstream failure: HTTP 200 with an in-stream error event
+      if (currentEventType === "error") {
+        error ??= extractStreamErrorMessage(dataStr);
+        continue;
+      }
+
+      // Skip other non-content events (result, done)
       if (currentEventType && currentEventType !== "content") {
         continue;
       }
@@ -85,7 +128,38 @@ function parseSSEChunks(text: string): string[] | null {
     }
   }
 
-  return hasSSEStructure ? chunks : null;
+  return hasSSEStructure ? { chunks, error } : null;
+}
+
+/**
+ * Handle one parsed SSE block: abort on an upstream error event, otherwise
+ * forward its content deltas. Returns the updated accumulated content.
+ */
+async function processSSEBlock(
+  part: string,
+  accumulatedContent: string,
+  writer: WritableStreamDefaultWriter<Uint8Array>,
+  callbacks: StreamingCallbacks,
+): Promise<string> {
+  const parsed = parseSSEChunks(part);
+  if (!parsed) return accumulatedContent;
+
+  if (parsed.error) {
+    // Do not call onEnd: reporting a completed response here would tell the
+    // client the (possibly empty) partial answer was the whole answer.
+    throw new ApiError(parsed.error, 502, "upstream_stream_error");
+  }
+
+  let content = accumulatedContent;
+  for (const chunk of parsed.chunks) {
+    // Issue #1: dedup using running accumulated string (O(1) per check)
+    // Guards against an upstream that repeats the full text as its last event
+    if (content && chunk === content) continue;
+
+    content += chunk;
+    await callbacks.onChunk(writer, chunk);
+  }
+  return content;
 }
 
 /**
@@ -160,31 +234,23 @@ export function executeStreamingPipeline(
         buffer = parts.pop() || "";
 
         for (const part of parts) {
-          const chunks = parseSSEChunks(part);
-          if (chunks) {
-            for (const chunk of chunks) {
-              // Issue #1: dedup using running accumulated string (O(1) per check)
-              // 1min.ai sends the full accumulated text as the final content event
-              if (accumulatedContent && chunk === accumulatedContent) continue;
-
-              accumulatedContent += chunk;
-              await callbacks.onChunk(writer, chunk);
-            }
-          }
+          accumulatedContent = await processSSEBlock(
+            part,
+            accumulatedContent,
+            writer,
+            callbacks,
+          );
         }
       }
 
       // Process any remaining buffer (SSE mode only)
       if (detectedSSE && buffer.trim()) {
-        const chunks = parseSSEChunks(buffer);
-        if (chunks) {
-          for (const chunk of chunks) {
-            if (accumulatedContent && chunk === accumulatedContent) continue;
-
-            accumulatedContent += chunk;
-            await callbacks.onChunk(writer, chunk);
-          }
-        }
+        accumulatedContent = await processSSEBlock(
+          buffer,
+          accumulatedContent,
+          writer,
+          callbacks,
+        );
       }
 
       await callbacks.onEnd(writer, accumulatedContent);
@@ -194,9 +260,12 @@ export function executeStreamingPipeline(
       try {
         const errorMessage =
           error instanceof Error ? error.message : "Stream interrupted";
+        const errorType =
+          error instanceof ApiError ? error.type : "server_error";
+        const errorCode = error instanceof ApiError ? error.code : null;
         await writer.write(
           encoder.encode(
-            `data: ${JSON.stringify({ error: { message: errorMessage, type: "server_error" } })}\n\n`,
+            `data: ${JSON.stringify({ error: { message: errorMessage, type: errorType, code: errorCode } })}\n\n`,
           ),
         );
         await writer.close();

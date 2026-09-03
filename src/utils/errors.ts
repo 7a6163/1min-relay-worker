@@ -54,14 +54,15 @@ export class ModelNotFoundError extends Error {
 
 export class ApiError extends Error {
   public readonly type = "api_error";
-  public readonly code: string | null = null;
+  public readonly code: string | null;
   public readonly param: string | null = null;
   public readonly status: number;
 
-  constructor(message: string, status: number = 500) {
+  constructor(message: string, status: number = 500, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code ?? null;
   }
 }
 
