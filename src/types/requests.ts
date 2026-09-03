@@ -70,7 +70,10 @@ export interface ResponseRequest {
 }
 
 export interface ResponseInputItem {
-  type: "message";
+  // Optional per the OpenAI Responses API spec: an item carrying only
+  // `role` + `content` is implicitly a message item. Many clients (e.g. the
+  // n8n OpenAI node) omit it.
+  type?: string;
   role: "user" | "assistant" | "system";
   content: string | Array<{ type: string; text?: string }>;
 }
