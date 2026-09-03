@@ -10,6 +10,9 @@ export interface Env {
   // Models API URL
   ONE_MIN_MODELS_API_URL: string;
 
+  // Public CDN serving generated assets (optional; a constant is used if unset)
+  ONE_MIN_ASSET_CDN_URL?: string;
+
   // KV Namespaces
   RATE_LIMIT_STORE?: KVNamespace;
   MODEL_CACHE?: KVNamespace;

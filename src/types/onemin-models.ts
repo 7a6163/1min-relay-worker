@@ -6,7 +6,10 @@ export interface OneMinModelEntry {
   modelId: string;
   name: string;
   provider: string;
+  /** "ACTIVE" | "DISABLED" — anything other than ACTIVE is rejected upstream */
   status: string;
+  /** ISO timestamp; a date already in the past means the model is gone */
+  deprecationDate?: string | null;
   features: string[];
   modality: { INPUT: string[]; OUTPUT: string[] };
   creditMetadata: Record<string, unknown>;
@@ -22,6 +25,7 @@ export interface CachedModelData {
   visionModelIds: string[];
   codeInterpreterModelIds: string[];
   speechModelIds?: string[];
+  ttsModelIds?: string[];
   entries: OneMinModelEntry[];
   fetchedAt: number;
 }

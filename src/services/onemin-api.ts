@@ -2,7 +2,11 @@
  * 1min.ai API service layer
  */
 
-import { WHISPER_MODEL_IDS } from "../constants/config";
+import {
+  DEFAULT_IMAGE_QUALITY,
+  IMAGE_MODELS_REQUIRING_QUALITY,
+  WHISPER_MODEL_IDS,
+} from "../constants/config";
 import type {
   Env,
   Message,
@@ -15,17 +19,8 @@ import { ApiError } from "../utils/errors";
 import { processImageUrl, uploadImageToAsset } from "../utils/image";
 import { extractTextFromMessageContent } from "../utils/message-processing";
 import type { WebSearchConfig } from "../utils/model-parser";
+import { describeUpstreamError } from "../utils/upstream-error";
 import { isVisionModel } from "./model-registry";
-
-// Map upstream HTTP status to a safe client-facing error message
-function sanitizeUpstreamError(status: number): string {
-  if (status === 401) return "Authentication failed with upstream provider";
-  if (status === 403) return "Access denied by upstream provider";
-  if (status === 404) return "Resource not found on upstream provider";
-  if (status === 429) return "Rate limited by upstream provider";
-  if (status >= 500) return "Upstream provider returned an internal error";
-  return "Upstream request failed";
-}
 
 // Converts message array to a single prompt string for the 1min.ai API
 function formatConversationHistory(
@@ -121,10 +116,8 @@ export class OneMinApiService {
           }
         }
 
-        throw new ApiError(
-          sanitizeUpstreamError(response.status),
-          response.status,
-        );
+        const upstream = describeUpstreamError(response.status, rawErrorBody);
+        throw new ApiError(upstream.message, response.status, upstream.code);
       }
 
       return response;
@@ -178,10 +171,8 @@ export class OneMinApiService {
       const rawErrorBody = await response.text().catch(() => "(unreadable)");
       const errorBody = rawErrorBody.slice(0, 500);
       console.error("1min.ai image API error:", errorBody);
-      throw new ApiError(
-        sanitizeUpstreamError(response.status),
-        response.status,
-      );
+      const upstream = describeUpstreamError(response.status, rawErrorBody);
+      throw new ApiError(upstream.message, response.status, upstream.code);
     }
 
     const data = await response.json();
@@ -270,15 +261,54 @@ export class OneMinApiService {
     model: string,
     n?: number,
     size?: string,
+    quality?: string,
   ): OneMinRequestBody {
+    const promptObject: OneMinPromptObject = {
+      prompt: prompt,
+      n: n ?? 1,
+      size: size ?? "1024x1024",
+    };
+
+    // Some models reject a request that omits `quality`. Forward the client's
+    // value when given, and supply a default for the models that require one —
+    // dropping it silently made those models unusable through the relay.
+    const effectiveQuality =
+      quality ??
+      (IMAGE_MODELS_REQUIRING_QUALITY.has(model)
+        ? DEFAULT_IMAGE_QUALITY
+        : undefined);
+    if (effectiveQuality) {
+      promptObject.quality = effectiveQuality;
+    }
+
     return {
       type: "IMAGE_GENERATOR",
       model: model,
-      promptObject: {
-        prompt: prompt,
-        n: n ?? 1,
-        size: size ?? "1024x1024",
-      },
+      promptObject,
+    };
+  }
+
+  buildTextToSpeechRequestBody(
+    text: string,
+    model: string,
+    voice: string,
+    responseFormat: string,
+    speed?: number,
+  ): OneMinRequestBody {
+    const promptObject: OneMinPromptObject = {
+      text,
+      voice,
+      response_format: responseFormat,
+    };
+
+    if (speed !== undefined) {
+      promptObject.speed = speed;
+    }
+
+    return {
+      type: "TEXT_TO_SPEECH",
+      model,
+      promptObject,
     };
   }
 
@@ -374,10 +404,8 @@ export class OneMinApiService {
     if (!response.ok) {
       const rawError = await response.text().catch(() => "(unreadable)");
       console.error("1min.ai audio API error:", rawError.slice(0, 500));
-      throw new ApiError(
-        sanitizeUpstreamError(response.status),
-        response.status,
-      );
+      const upstream = describeUpstreamError(response.status, rawError);
+      throw new ApiError(upstream.message, response.status, upstream.code);
     }
 
     return (await response.json()) as OneMinChatResponse;

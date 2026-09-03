@@ -6,13 +6,16 @@
 import {
   AUDIO_TRANSLATION_MODEL_IDS,
   FALLBACK_SPEECH_MODEL_IDS,
+  FALLBACK_TTS_MODEL_IDS,
 } from "../constants/config";
 import type { CachedModelData, Env, OneMinModelEntry } from "../types";
 import { ApiError } from "../utils/errors";
 
 const MEMORY_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const KV_TTL_SECONDS = 60 * 60; // 1 hour
-const KV_KEY = "model-data";
+// Bumped whenever the cached shape or the filtering changes, so entries written
+// by an older version are not reused.
+const KV_KEY = "model-data-v2";
 const FETCH_TIMEOUT_MS = 5000;
 
 // Module-level in-memory cache
@@ -34,50 +37,70 @@ function isValidCachedData(data: unknown): data is CachedModelData {
   );
 }
 
+/**
+ * The models API lists entries the account cannot actually use: `status` can be
+ * "DISABLED", and `deprecationDate` can already be in the past. Requests for
+ * those are rejected upstream with 400 UNSUPPORTED_MODEL, so they must not
+ * reach the client model list or pass model validation.
+ */
+export function isUsableModel(
+  model: OneMinModelEntry,
+  now: number = Date.now(),
+): boolean {
+  if (model.status !== "ACTIVE") return false;
+  if (model.deprecationDate) {
+    const deprecatedAt = Date.parse(model.deprecationDate);
+    if (!Number.isNaN(deprecatedAt) && deprecatedAt <= now) return false;
+  }
+  return true;
+}
+
 function processModels(
   chatModels: OneMinModelEntry[],
   imageModels: OneMinModelEntry[],
   speechModels: OneMinModelEntry[],
+  ttsModels: OneMinModelEntry[],
 ): CachedModelData {
+  const now = Date.now();
+  const usableChat = chatModels.filter((m) => isUsableModel(m, now));
+  const usableImage = imageModels.filter((m) => isUsableModel(m, now));
+  const usableSpeech = speechModels.filter((m) => isUsableModel(m, now));
+  const usableTts = ttsModels.filter((m) => isUsableModel(m, now));
+
   // Deduplicate by modelId (chat models take priority)
   const seen = new Set<string>();
   const allEntries: OneMinModelEntry[] = [];
 
-  for (const model of chatModels) {
-    if (!seen.has(model.modelId)) {
-      seen.add(model.modelId);
-      allEntries.push(model);
-    }
-  }
-  for (const model of imageModels) {
-    if (!seen.has(model.modelId)) {
-      seen.add(model.modelId);
-      allEntries.push(model);
-    }
-  }
-  for (const model of speechModels) {
-    if (!seen.has(model.modelId)) {
-      seen.add(model.modelId);
-      allEntries.push(model);
+  for (const group of [usableChat, usableImage, usableSpeech, usableTts]) {
+    for (const model of group) {
+      if (!seen.has(model.modelId)) {
+        seen.add(model.modelId);
+        allEntries.push(model);
+      }
     }
   }
 
-  const chatModelIds = chatModels.map((m) => m.modelId);
-  const imageModelIds = imageModels.map((m) => m.modelId);
+  const chatModelIds = usableChat.map((m) => m.modelId);
+  const imageModelIds = usableImage.map((m) => m.modelId);
 
-  const visionModelIds = chatModels
+  const visionModelIds = usableChat
     .filter((m) => m.modality?.INPUT?.includes("image"))
     .map((m) => m.modelId);
 
-  const codeInterpreterModelIds = chatModels
+  const codeInterpreterModelIds = usableChat
     .filter((m) => m.features.includes("CODE_GENERATOR"))
     .map((m) => m.modelId);
 
-  // Use API-fetched speech models, falling back to hardcoded list if empty
+  // Use API-fetched models, falling back to hardcoded lists if empty
   const speechModelIds =
-    speechModels.length > 0
-      ? speechModels.map((m) => m.modelId)
+    usableSpeech.length > 0
+      ? usableSpeech.map((m) => m.modelId)
       : [...FALLBACK_SPEECH_MODEL_IDS];
+
+  const ttsModelIds =
+    usableTts.length > 0
+      ? usableTts.map((m) => m.modelId)
+      : [...FALLBACK_TTS_MODEL_IDS];
 
   return {
     chatModelIds,
@@ -85,6 +108,7 @@ function processModels(
     visionModelIds,
     codeInterpreterModelIds,
     speechModelIds,
+    ttsModelIds,
     entries: allEntries,
     fetchedAt: Date.now(),
   };
@@ -121,15 +145,18 @@ async function fetchModelsFromAPI(
 }
 
 async function fetchAndProcess(env: Env): Promise<CachedModelData> {
-  const [chatModels, imageModels, speechModels] = await Promise.all([
+  const [chatModels, imageModels, speechModels, ttsModels] = await Promise.all([
     fetchModelsFromAPI(env.ONE_MIN_MODELS_API_URL, "UNIFY_CHAT_WITH_AI"),
     fetchModelsFromAPI(env.ONE_MIN_MODELS_API_URL, "IMAGE_GENERATOR"),
     fetchModelsFromAPI(env.ONE_MIN_MODELS_API_URL, "SPEECH_TO_TEXT").catch(
       () => [] as OneMinModelEntry[],
     ),
+    fetchModelsFromAPI(env.ONE_MIN_MODELS_API_URL, "TEXT_TO_SPEECH").catch(
+      () => [] as OneMinModelEntry[],
+    ),
   ]);
 
-  return processModels(chatModels, imageModels, speechModels);
+  return processModels(chatModels, imageModels, speechModels, ttsModels);
 }
 
 /**
@@ -256,6 +283,18 @@ export async function isSpeechModel(model: string, env: Env): Promise<boolean> {
   const data = await getModelData(env);
   const speechIds = data.speechModelIds ?? FALLBACK_SPEECH_MODEL_IDS;
   return speechIds.includes(model);
+}
+
+/**
+ * Check if a model supports text-to-speech (TEXT_TO_SPEECH feature)
+ */
+export async function isTextToSpeechModel(
+  model: string,
+  env: Env,
+): Promise<boolean> {
+  const data = await getModelData(env);
+  const ttsIds = data.ttsModelIds ?? FALLBACK_TTS_MODEL_IDS;
+  return ttsIds.includes(model);
 }
 
 /**

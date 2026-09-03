@@ -21,6 +21,8 @@ export interface ChatCompletionRequest {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
+  // Rejected with 400: the upstream has no tool-calling mechanism.
+  tools?: unknown[];
 }
 
 export interface ImageGenerationRequest {
@@ -28,6 +30,20 @@ export interface ImageGenerationRequest {
   prompt: string;
   n?: number;
   size?: string;
+  /** Required by some upstream models (e.g. gpt-image-1-mini) */
+  quality?: string;
+  /** Accepted for SDK compatibility; only "url" is supported */
+  response_format?: string;
+  user?: string;
+}
+
+export interface SpeechRequest {
+  model?: string;
+  /** OpenAI names the text `input`; upstream names it `text` */
+  input: string;
+  voice?: string;
+  response_format?: string;
+  speed?: number;
 }
 
 export interface JSONSchema {
