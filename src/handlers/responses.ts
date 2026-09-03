@@ -103,14 +103,17 @@ export class ResponseHandler extends BaseTextHandler {
     } else {
       // Array of input items
       for (const item of input) {
-        if (item.type === "message") {
+        if (!item.type || item.type === "message") {
           const content =
             typeof item.content === "string"
               ? item.content
               : item.content
                   .filter(
                     (c): c is typeof c & { text: string } =>
-                      c.type === "text" && !!c.text,
+                      (c.type === "text" ||
+                        c.type === "input_text" ||
+                        c.type === "output_text") &&
+                      !!c.text,
                   )
                   .map((c) => c.text)
                   .join("\n");
