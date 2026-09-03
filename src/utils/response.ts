@@ -54,6 +54,13 @@ export function extractOneMinUsage(
   const promptTokens = inputToken ?? 0;
   const completionTokens = outputToken ?? 0;
 
+  // Observed in production: the upstream occasionally returns metadata whose
+  // token counts are all zero for a request that plainly consumed tokens. A
+  // real exchange is never 0/0 — the prompt alone costs something — so treat
+  // that as "not accounted for" and let the caller estimate locally, rather
+  // than reporting a confident zero to a client that meters on it.
+  if (promptTokens === 0 && completionTokens === 0) return null;
+
   return {
     promptTokens,
     completionTokens,

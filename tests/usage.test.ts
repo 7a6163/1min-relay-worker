@@ -70,6 +70,29 @@ describe("extractOneMinUsage", () => {
     });
   });
 
+  it("treats an all-zero count as unaccounted rather than free", () => {
+    // Seen against the live upstream: metadata present, every count zero, for
+    // a request that obviously consumed tokens. Reporting a confident 0 to a
+    // client that meters on usage is worse than falling back to an estimate.
+    expect(
+      extractOneMinUsage(
+        response({ inputToken: 0, outputToken: 0, totalToken: 0 }),
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps a zero completion when the prompt was counted", () => {
+    // An empty answer is legitimate; an uncounted prompt is not.
+    expect(
+      extractOneMinUsage(response({ inputToken: 12, outputToken: 0 })),
+    ).toEqual({
+      promptTokens: 12,
+      completionTokens: 0,
+      totalTokens: 12,
+      finishReason: undefined,
+    });
+  });
+
   it("does not read a top-level usage field", () => {
     // The upstream never sends one; reading it is what produced 0/0/0 before.
     const withFakeUsage = {
