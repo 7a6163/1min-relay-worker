@@ -69,6 +69,48 @@ export function extractOneMinUsage(
   };
 }
 
+/** OpenAI's `finish_reason` is a closed set; anything else breaks strict SDKs. */
+const FINISH_REASONS: Record<string, OpenAIFinishReason> = {
+  length: "length",
+  max_tokens: "length",
+  max_output_tokens: "length",
+  truncated: "length",
+  content_filter: "content_filter",
+  safety: "content_filter",
+  recitation: "content_filter",
+  prohibited_content: "content_filter",
+  tool_calls: "tool_calls",
+  tool_use: "tool_calls",
+  function_call: "tool_calls",
+};
+
+export type OpenAIFinishReason =
+  | "stop"
+  | "length"
+  | "content_filter"
+  | "tool_calls";
+
+/**
+ * Map the upstream's `finishReason` onto OpenAI's closed set.
+ *
+ * 1min.ai fronts many providers and passes their reason through verbatim, so
+ * the value is provider-shaped: Cohere answers "complete", others uppercase it
+ * or omit it entirely. Returning that raw makes a strictly-typed client fail
+ * to parse a response that is otherwise fine, so anything unrecognised — an
+ * ordinary completion by any other name — becomes "stop".
+ *
+ * Read straight off the record rather than from `extractOneMinUsage`, which
+ * reports null whenever the token counts are missing or zero: that is exactly
+ * when the reason matters most.
+ */
+export function extractFinishReason(
+  data: OneMinChatResponse,
+): OpenAIFinishReason {
+  const reason = data.aiRecord?.metadata?.finishReason;
+  if (typeof reason !== "string") return "stop";
+  return FINISH_REASONS[reason.trim().toLowerCase()] ?? "stop";
+}
+
 export function createSuccessResponse<T = unknown>(
   data: T,
   status: number = 200,
