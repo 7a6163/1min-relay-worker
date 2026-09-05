@@ -37,15 +37,6 @@ export interface ImageGenerationRequest {
   user?: string;
 }
 
-export interface SpeechRequest {
-  model?: string;
-  /** OpenAI names the text `input`; upstream names it `text` */
-  input: string;
-  voice?: string;
-  response_format?: string;
-  speed?: number;
-}
-
 export interface JSONSchema {
   name: string;
   description?: string;

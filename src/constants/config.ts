@@ -67,29 +67,6 @@ export const FALLBACK_SPEECH_MODEL_IDS = [
   "medical_conversation",
 ];
 
-// Hardcoded fallback for text-to-speech models (if the API doesn't return them)
-export const FALLBACK_TTS_MODEL_IDS = [
-  "tts-1",
-  "tts-1-hd",
-  "elevenlabs-tts",
-  "google-tts",
-  "qwen3-tts-flash",
-];
-
-// Text-to-speech constraints (matching OpenAI's limits)
-export const DEFAULT_TTS_MODEL = "tts-1";
-export const MAX_TTS_INPUT_LENGTH = 4096;
-export const DEFAULT_TTS_VOICE = "alloy";
-export const DEFAULT_TTS_RESPONSE_FORMAT = "mp3";
-export const TTS_CONTENT_TYPES: Record<string, string> = {
-  mp3: "audio/mpeg",
-  opus: "audio/opus",
-  aac: "audio/aac",
-  flac: "audio/flac",
-  wav: "audio/wav",
-  pcm: "audio/pcm",
-};
-
 // API endpoints
 export const API_ENDPOINTS = {
   CHAT_COMPLETIONS: "/v1/chat/completions",
@@ -98,6 +75,5 @@ export const API_ENDPOINTS = {
   IMAGES_GENERATIONS: "/v1/images/generations",
   AUDIO_TRANSCRIPTIONS: "/v1/audio/transcriptions",
   AUDIO_TRANSLATIONS: "/v1/audio/translations",
-  AUDIO_SPEECH: "/v1/audio/speech",
   MODELS: "/v1/models",
 } as const;

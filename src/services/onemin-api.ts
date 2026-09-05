@@ -288,30 +288,6 @@ export class OneMinApiService {
     };
   }
 
-  buildTextToSpeechRequestBody(
-    text: string,
-    model: string,
-    voice: string,
-    responseFormat: string,
-    speed?: number,
-  ): OneMinRequestBody {
-    const promptObject: OneMinPromptObject = {
-      text,
-      voice,
-      response_format: responseFormat,
-    };
-
-    if (speed !== undefined) {
-      promptObject.speed = speed;
-    }
-
-    return {
-      type: "TEXT_TO_SPEECH",
-      model,
-      promptObject,
-    };
-  }
-
   /**
    * Google Speech models use `language` in promptObject;
    * Whisper-1 uses `response_format` instead.
