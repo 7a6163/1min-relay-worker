@@ -19,6 +19,23 @@ export interface StreamingCallbacks {
     writer: WritableStreamDefaultWriter<Uint8Array>,
     accumulatedContent: string,
   ) => Promise<void>;
+  /**
+   * Write the error frame for this caller's protocol. The pipeline is shared by
+   * the OpenAI and Anthropic streams, and an Anthropic client dispatches purely
+   * on the SSE event name — the OpenAI-shaped default reads to it as a stream
+   * that stopped mid-message with no `message_stop`, hiding the very message
+   * the upstream sent to explain the failure.
+   */
+  onError?: (
+    writer: WritableStreamDefaultWriter<Uint8Array>,
+    error: StreamErrorDetail,
+  ) => Promise<void>;
+}
+
+export interface StreamErrorDetail {
+  message: string;
+  type: string;
+  code: string | null;
 }
 
 /**
@@ -263,11 +280,18 @@ export function executeStreamingPipeline(
         const errorType =
           error instanceof ApiError ? error.type : "server_error";
         const errorCode = error instanceof ApiError ? error.code : null;
-        await writer.write(
-          encoder.encode(
-            `data: ${JSON.stringify({ error: { message: errorMessage, type: errorType, code: errorCode } })}\n\n`,
-          ),
-        );
+        const detail: StreamErrorDetail = {
+          message: errorMessage,
+          type: errorType,
+          code: errorCode,
+        };
+        if (callbacks.onError) {
+          await callbacks.onError(writer, detail);
+        } else {
+          await writer.write(
+            encoder.encode(`data: ${JSON.stringify({ error: detail })}\n\n`),
+          );
+        }
         await writer.close();
       } catch {
         await writer.abort(error).catch(() => {});
