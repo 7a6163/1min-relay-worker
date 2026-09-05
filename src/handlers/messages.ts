@@ -14,7 +14,6 @@ import type {
   OneMinChatResponse,
 } from "../types";
 import {
-  assertToolsUnsupported,
   calculateTokens,
   estimateInputTokens,
   extractOneMinContent,
@@ -32,8 +31,6 @@ export class MessagesHandler extends BaseTextHandler {
     requestBody: AnthropicMessageRequest,
     apiKey: string,
   ): Promise<Response> {
-    assertToolsUnsupported(requestBody.tools);
-
     // Validate required fields
     if (!requestBody.messages || !Array.isArray(requestBody.messages)) {
       throw new ValidationError("messages: Field required");
@@ -231,6 +228,12 @@ export class MessagesHandler extends BaseTextHandler {
         // Send message_stop
         await writeSSEEventWithType(writer, "message_stop", {
           type: "message_stop",
+        });
+      },
+      onError: async (writer, error) => {
+        await writeSSEEventWithType(writer, "error", {
+          type: "error",
+          error: { type: error.type, message: error.message },
         });
       },
     });

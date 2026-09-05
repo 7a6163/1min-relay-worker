@@ -10,10 +10,10 @@ import type {
   OneMinChatResponse,
 } from "../types";
 import {
-  assertToolsUnsupported,
   calculateTokens,
   createSuccessResponse,
   estimateInputTokens,
+  extractFinishReason,
   extractOneMinContent,
   extractOneMinUsage,
   ValidationError,
@@ -33,8 +33,6 @@ export class ChatHandler extends BaseTextHandler {
     requestBody: ChatCompletionRequest,
     apiKey: string,
   ): Promise<Response> {
-    assertToolsUnsupported(requestBody.tools);
-
     if (!requestBody.messages || !Array.isArray(requestBody.messages)) {
       throw new ValidationError(
         "Messages field is required and must be an array",
@@ -141,7 +139,7 @@ export class ChatHandler extends BaseTextHandler {
             role: "assistant",
             content,
           },
-          finish_reason: usage?.finishReason ?? "stop",
+          finish_reason: extractFinishReason(data),
         },
       ],
       usage: {

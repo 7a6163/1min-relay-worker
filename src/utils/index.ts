@@ -13,6 +13,5 @@ export * from "./response-input";
 export * from "./sse";
 export * from "./streaming";
 export * from "./tokens";
-export * from "./tools";
 export * from "./upstream-error";
 export * from "./utf8-decoder";

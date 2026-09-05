@@ -14,7 +14,6 @@ import type {
   ResponsesOutputMessage,
 } from "../types";
 import {
-  assertToolsUnsupported,
   calculateTokens,
   convertInputToMessages,
   createSuccessResponse,
@@ -34,8 +33,6 @@ export class ResponseHandler extends BaseTextHandler {
     requestBody: ResponseRequest,
     apiKey: string,
   ): Promise<Response> {
-    assertToolsUnsupported(requestBody.tools);
-
     // Validate required fields - support both input and messages formats
     if (
       !requestBody.input &&
