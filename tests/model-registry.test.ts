@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isUsableModel } from "../src/services/model-registry";
+import { isUsableModel, usableModels } from "../src/services/model-registry";
 import type { OneMinModelEntry } from "../src/types/onemin-models";
-
-const NOW = Date.parse("2026-09-03T00:00:00.000Z");
 
 function model(overrides: Partial<OneMinModelEntry>): OneMinModelEntry {
   return {
@@ -18,8 +16,8 @@ function model(overrides: Partial<OneMinModelEntry>): OneMinModelEntry {
 }
 
 describe("isUsableModel", () => {
-  it("accepts an active model with no deprecation date", () => {
-    expect(isUsableModel(model({}), NOW)).toBe(true);
+  it("accepts an active model", () => {
+    expect(isUsableModel(model({}))).toBe(true);
   });
 
   it("rejects a DISABLED model", () => {
@@ -28,27 +26,45 @@ describe("isUsableModel", () => {
     expect(
       isUsableModel(
         model({ modelId: "black-forest-labs/flux-schnell", status: "DISABLED" }),
-        NOW,
       ),
     ).toBe(false);
   });
 
-  it("accepts a model whose deprecation date is still in the future", () => {
+  it("keeps a model that carries a deprecation date, past or future", () => {
+    // Measured against the live API: dated entries are ACTIVE, answer normally,
+    // and share batch dates a few weeks out — a renewal marker, not an end of
+    // life. Filtering on the date would drop 14 working models, the gpt-5
+    // family among them, on days the upstream still serves them.
     expect(
-      isUsableModel(model({ deprecationDate: "2026-12-10T17:00:00.000Z" }), NOW),
+      isUsableModel(model({ deprecationDate: "2026-12-10T17:00:00.000Z" })),
+    ).toBe(true);
+    expect(
+      isUsableModel(model({ deprecationDate: "2020-01-01T00:00:00.000Z" })),
     ).toBe(true);
   });
+});
 
-  it("rejects a model whose deprecation date has passed", () => {
-    expect(
-      isUsableModel(model({ deprecationDate: "2026-01-01T00:00:00.000Z" }), NOW),
-    ).toBe(false);
+describe("usableModels", () => {
+  it("drops the unusable entries", () => {
+    const kept = usableModels([
+      model({ modelId: "good" }),
+      model({ modelId: "gone", status: "DISABLED" }),
+    ]);
+    expect(kept.map((m) => m.modelId)).toEqual(["good"]);
   });
 
-  it("ignores a null or unparseable deprecation date", () => {
-    expect(isUsableModel(model({ deprecationDate: null }), NOW)).toBe(true);
-    expect(isUsableModel(model({ deprecationDate: "not a date" }), NOW)).toBe(
-      true,
-    );
+  it("keeps the whole list when the filter would empty it", () => {
+    // An empty result means the upstream renamed or recased `status`, not that
+    // the account lost every model. Serving a stale list beats answering
+    // model_not_found for every request until the cache expires.
+    const all = [
+      model({ modelId: "a", status: "active" }),
+      model({ modelId: "b", status: "active" }),
+    ];
+    expect(usableModels(all).map((m) => m.modelId)).toEqual(["a", "b"]);
+  });
+
+  it("returns an empty list for an empty input", () => {
+    expect(usableModels([])).toEqual([]);
   });
 });

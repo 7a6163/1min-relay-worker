@@ -6,7 +6,6 @@
 import {
   AUDIO_TRANSLATION_MODEL_IDS,
   FALLBACK_SPEECH_MODEL_IDS,
-  FALLBACK_TTS_MODEL_IDS,
 } from "../constants/config";
 import type { CachedModelData, Env, OneMinModelEntry } from "../types";
 import { ApiError } from "../utils/errors";
@@ -39,39 +38,48 @@ function isValidCachedData(data: unknown): data is CachedModelData {
 
 /**
  * The models API lists entries the account cannot actually use: `status` can be
- * "DISABLED", and `deprecationDate` can already be in the past. Requests for
- * those are rejected upstream with 400 UNSUPPORTED_MODEL, so they must not
- * reach the client model list or pass model validation.
+ * "DISABLED". Requests for those are rejected upstream with 400
+ * UNSUPPORTED_MODEL, so they must not reach the client model list or pass
+ * model validation.
+ *
+ * `deprecationDate` is deliberately not part of this check. Measured against
+ * the live API: every dated entry is ACTIVE with a date weeks or months out,
+ * and the dates arrive in batches shared by unrelated models (2026-10-21
+ * covers gpt-4-turbo, gpt-3.5-turbo, o3-mini and gpt-4.1-nano at once), which
+ * reads as a renewal marker rather than a per-model end of life. Filtering on
+ * it would drop 14 models that answer today — the gpt-5 family among them —
+ * on dates the upstream never treated as an end of life. The one model
+ * confirmed unusable, black-forest-labs/flux-schnell, is flagged by `status`
+ * and carries no deprecation date at all.
  */
-export function isUsableModel(
-  model: OneMinModelEntry,
-  now: number = Date.now(),
-): boolean {
-  if (model.status !== "ACTIVE") return false;
-  if (model.deprecationDate) {
-    const deprecatedAt = Date.parse(model.deprecationDate);
-    if (!Number.isNaN(deprecatedAt) && deprecatedAt <= now) return false;
-  }
-  return true;
+export function isUsableModel(model: OneMinModelEntry): boolean {
+  return model.status === "ACTIVE";
+}
+
+/**
+ * Filtering that removes *everything* means the upstream changed `status`, not
+ * that the account lost every model. Serving the unfiltered list beats 404ing
+ * every request for a whole cache TTL.
+ */
+export function usableModels(models: OneMinModelEntry[]): OneMinModelEntry[] {
+  const usable = models.filter(isUsableModel);
+  return usable.length > 0 ? usable : models;
 }
 
 function processModels(
   chatModels: OneMinModelEntry[],
   imageModels: OneMinModelEntry[],
   speechModels: OneMinModelEntry[],
-  ttsModels: OneMinModelEntry[],
 ): CachedModelData {
-  const now = Date.now();
-  const usableChat = chatModels.filter((m) => isUsableModel(m, now));
-  const usableImage = imageModels.filter((m) => isUsableModel(m, now));
-  const usableSpeech = speechModels.filter((m) => isUsableModel(m, now));
-  const usableTts = ttsModels.filter((m) => isUsableModel(m, now));
+  const usableChat = usableModels(chatModels);
+  const usableImage = usableModels(imageModels);
+  const usableSpeech = usableModels(speechModels);
 
   // Deduplicate by modelId (chat models take priority)
   const seen = new Set<string>();
   const allEntries: OneMinModelEntry[] = [];
 
-  for (const group of [usableChat, usableImage, usableSpeech, usableTts]) {
+  for (const group of [usableChat, usableImage, usableSpeech]) {
     for (const model of group) {
       if (!seen.has(model.modelId)) {
         seen.add(model.modelId);
@@ -97,18 +105,12 @@ function processModels(
       ? usableSpeech.map((m) => m.modelId)
       : [...FALLBACK_SPEECH_MODEL_IDS];
 
-  const ttsModelIds =
-    usableTts.length > 0
-      ? usableTts.map((m) => m.modelId)
-      : [...FALLBACK_TTS_MODEL_IDS];
-
   return {
     chatModelIds,
     imageModelIds,
     visionModelIds,
     codeInterpreterModelIds,
     speechModelIds,
-    ttsModelIds,
     entries: allEntries,
     fetchedAt: Date.now(),
   };
@@ -145,18 +147,15 @@ async function fetchModelsFromAPI(
 }
 
 async function fetchAndProcess(env: Env): Promise<CachedModelData> {
-  const [chatModels, imageModels, speechModels, ttsModels] = await Promise.all([
+  const [chatModels, imageModels, speechModels] = await Promise.all([
     fetchModelsFromAPI(env.ONE_MIN_MODELS_API_URL, "UNIFY_CHAT_WITH_AI"),
     fetchModelsFromAPI(env.ONE_MIN_MODELS_API_URL, "IMAGE_GENERATOR"),
     fetchModelsFromAPI(env.ONE_MIN_MODELS_API_URL, "SPEECH_TO_TEXT").catch(
       () => [] as OneMinModelEntry[],
     ),
-    fetchModelsFromAPI(env.ONE_MIN_MODELS_API_URL, "TEXT_TO_SPEECH").catch(
-      () => [] as OneMinModelEntry[],
-    ),
   ]);
 
-  return processModels(chatModels, imageModels, speechModels, ttsModels);
+  return processModels(chatModels, imageModels, speechModels);
 }
 
 /**
@@ -283,18 +282,6 @@ export async function isSpeechModel(model: string, env: Env): Promise<boolean> {
   const data = await getModelData(env);
   const speechIds = data.speechModelIds ?? FALLBACK_SPEECH_MODEL_IDS;
   return speechIds.includes(model);
-}
-
-/**
- * Check if a model supports text-to-speech (TEXT_TO_SPEECH feature)
- */
-export async function isTextToSpeechModel(
-  model: string,
-  env: Env,
-): Promise<boolean> {
-  const data = await getModelData(env);
-  const ttsIds = data.ttsModelIds ?? FALLBACK_TTS_MODEL_IDS;
-  return ttsIds.includes(model);
 }
 
 /**
