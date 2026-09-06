@@ -21,7 +21,8 @@ export interface ChatCompletionRequest {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
-  // Rejected with 400: the upstream has no tool-calling mechanism.
+  // Accepted and ignored: the upstream has no tool-calling mechanism, and
+  // answering 400 broke clients that send `tools` on every request.
   tools?: unknown[];
 }
 

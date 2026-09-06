@@ -27,6 +27,43 @@ curl https://your-worker.your-subdomain.workers.dev/v1/models
 
 Capabilities such as vision, code interpreter, and web search are derived automatically from the API response — no hardcoded model lists.
 
+## Authentication
+
+Every endpoint except `GET /` requires a key, supplied either way:
+
+```bash
+-H "Authorization: Bearer YOUR_API_KEY"   # OpenAI style
+-H "x-api-key: YOUR_API_KEY"              # Anthropic style
+```
+
+The key is forwarded upstream to 1min.ai as the `API-KEY` header, so it must
+be a valid 1min.ai key.
+
+Set the optional `AUTH_TOKEN` secret to gate the relay itself:
+
+```bash
+wrangler secret put AUTH_TOKEN
+```
+
+With `AUTH_TOKEN` set, the incoming key must equal it exactly or the request
+is rejected with 401. With it unset, any key is accepted and passed straight
+through.
+
+## Model Names
+
+### Web Search: the `:online` suffix
+
+Append `:online` to any chat model to run the request with 1min.ai web
+search enabled:
+
+```json
+{ "model": "gpt-4o:online", "messages": [{"role": "user", "content": "..."}] }
+```
+
+Tune it with the `WEB_SEARCH_NUM_OF_SITE` (default `1`) and
+`WEB_SEARCH_MAX_WORD` (default `500`) environment variables. Any other colon
+suffix is rejected with a 400.
+
 ## API Endpoints
 
 ### Chat Completions
@@ -34,6 +71,21 @@ Capabilities such as vision, code interpreter, and web search are derived automa
 ```
 POST /v1/chat/completions
 ```
+
+OpenAI-compatible. Supports `stream`, multi-turn conversations, and image
+input on vision models.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `messages` | array | Yes | OpenAI-format messages. Content may be a string or a text/`image_url` part array |
+| `model` | string | No | Defaults to `open-mistral-nemo`. Append `:online` for web search |
+| `stream` | boolean | No | SSE streaming |
+
+> **`temperature` and `max_tokens` are accepted but ignored.** The 1min.ai
+> Chat with AI API exposes no sampling parameters, so there is nowhere to
+> forward them. They are tolerated so the OpenAI SDKs do not error, but they
+> have no effect on the response. `tools` is likewise ignored — the upstream
+> has no tool-calling mechanism.
 
 ### Responses (Structured Outputs)
 
@@ -154,7 +206,9 @@ curl -X POST http://localhost:8787/v1/responses \
 
 - **Structured Outputs**: JSON objects and JSON schema validation
 - **Reasoning Effort**: Control reasoning depth (low, medium, high)
-- **Vision Support**: Same image input capabilities as Chat Completions
+- **Text only**: unlike Chat Completions, `/v1/responses` rejects non-text
+  content parts (`input_image`, `input_file`) with a 400. Use
+  `/v1/chat/completions` for vision requests.
 - **Streaming Support**: Full OpenAI-compatible SSE streaming with `response.completed` terminal event
 - **Enhanced Prompting**: Automatically optimizes prompts for structured responses
 
@@ -163,6 +217,19 @@ curl -X POST http://localhost:8787/v1/responses \
 ```
 POST /v1/images/generations
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `prompt` | string | Yes | Image prompt |
+| `model` | string | No | Defaults to `gpt-image-1-mini` |
+| `n` | number | No | Defaults to `1` |
+| `size` | string | No | Defaults to `1024x1024` |
+| `quality` | string | No | Forwarded when given; defaults to `low` for the models that require it |
+| `response_format` | string | No | Only `url` is supported |
+
+> `response_format: "b64_json"` is rejected with a 400. The upstream returns
+> stored image assets rather than inline data, so results always come back as
+> URLs on the 1min.ai asset CDN.
 
 ### Audio Transcription (Speech-to-Text)
 
@@ -208,7 +275,10 @@ print(transcript.text)
 POST /v1/audio/translations
 ```
 
-Translate audio to English text. Same parameters as transcription (except `language`).
+Translate audio to English text. Same parameters as transcription, except
+`language` (which does not apply) and `model`: **only `whisper-1` is
+supported here.** The Google Speech models valid for transcription
+(`latest_long`, `latest_short`, …) are rejected with a 400.
 
 ```bash
 curl -X POST http://localhost:8787/v1/audio/translations \
@@ -216,6 +286,43 @@ curl -X POST http://localhost:8787/v1/audio/translations \
   -F "file=@foreign-audio.mp3" \
   -F "model=whisper-1"
 ```
+
+### Messages (Anthropic-compatible)
+
+```
+POST /v1/messages
+```
+
+Accepts Anthropic Messages API requests and answers in Anthropic format,
+including the `x-api-key` header, top-level `system` prompts, and the
+`message_start` / `content_block_delta` / `message_stop` streaming events.
+Errors on this path are shaped as `{"type": "error", "error": {...}}` rather
+than the OpenAI envelope.
+
+```bash
+curl -X POST http://localhost:8787/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-3-5-sonnet-20241022",
+    "max_tokens": 1024,
+    "system": "You are concise.",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `messages` | array | Yes | Anthropic messages; `text` and `tool_result` blocks are flattened into the prompt |
+| `max_tokens` | number | Yes | Required by the Anthropic schema; not forwarded upstream |
+| `model` | string | No | Defaults to `open-mistral-nemo` |
+| `system` | string \| array | No | String or `text` block array |
+| `stream` | boolean | No | Anthropic SSE event stream |
+
+> **`image` content blocks are rejected with a 400.** Use
+> `/v1/chat/completions` for vision. `tools` is accepted by the schema but
+> ignored.
 
 ### List Models
 
@@ -229,29 +336,37 @@ GET /v1/models
 GET /
 ```
 
-Returns information about all available endpoints:
+Returns a plain-text greeting listing the main endpoints:
 
 - Chat Completions: `/v1/chat/completions`
 - Responses: `/v1/responses`
 - Image Generation: `/v1/images/generations`
-- Audio Transcription: `/v1/audio/transcriptions`
-- Audio Translation: `/v1/audio/translations`
 - Models: `/v1/models`
 
 ## Rate Limiting
 
 The worker implements distributed rate limiting with the following limits:
 
-- **Requests per minute**: 180 per IP address
-- **Tokens per minute**: 100,000 per IP address
+- **Requests per minute**: 180
+- **Tokens per minute**: 100,000
 
-Rate limits are enforced using Cloudflare KV storage, ensuring consistency across all worker instances.
+Both budgets are per **API key** — the bucket is keyed on a SHA-256 hash of
+the `Authorization` header, falling back to `CF-Connecting-IP` or
+`X-Forwarded-For` only when no key is present. One budget is shared across
+every endpoint; it is not per-endpoint.
+
+Rate limits are enforced using Cloudflare KV storage, ensuring consistency
+across all worker instances. Exceeding either budget returns HTTP 429; the
+response carries no `X-RateLimit-*` headers.
+
+If the `RATE_LIMIT_STORE` KV binding is absent, rate limiting is disabled
+rather than failing closed.
 
 ## Setup
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22.12+ (an active or maintenance LTS line: 22, 24 or 26)
 - Wrangler CLI
 - Cloudflare account with Workers and KV enabled
 
@@ -284,8 +399,8 @@ npm install
 4. Create KV namespaces:
 
 ```bash
-wrangler kv:namespace create "RATE_LIMIT_STORE"
-wrangler kv:namespace create "MODEL_CACHE"
+wrangler kv namespace create "RATE_LIMIT_STORE"
+wrangler kv namespace create "MODEL_CACHE"
 ```
 
 5. After running the commands above, you'll receive a KV namespace ID for each. Copy the IDs and update `wrangler.jsonc`:
@@ -371,10 +486,22 @@ If you encounter issues during deployment:
 
 The following environment variables are configured in `wrangler.jsonc`:
 
+Required, set in the `vars` block of `wrangler.jsonc`:
+
 - `ONE_MIN_CHAT_API_URL`: 1min.ai unified chat endpoint (`/api/chat-with-ai`)
 - `ONE_MIN_API_URL`: 1min.ai features endpoint for non-chat features like image generation (`/api/features`)
 - `ONE_MIN_ASSET_URL`: 1min.ai asset upload endpoint
 - `ONE_MIN_MODELS_API_URL`: 1min.ai models API endpoint (for dynamic model list)
+
+Optional:
+
+- `ONE_MIN_ASSET_CDN_URL`: base URL used to build image result URLs (defaults to `https://asset.1min.ai`)
+- `WEB_SEARCH_NUM_OF_SITE`: sites consulted for a `:online` request (default `1`)
+- `WEB_SEARCH_MAX_WORD`: word budget for `:online` search results (default `500`)
+
+Secret, set with `wrangler secret put`:
+
+- `AUTH_TOKEN`: if set, the incoming API key must match it exactly
 
 ### KV Namespaces
 
@@ -419,7 +546,7 @@ curl -X POST https://your-worker.your-subdomain.workers.dev/v1/images/generation
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "dall-e-3",
+    "model": "gpt-image-1-mini",
     "prompt": "A beautiful sunset over mountains",
     "n": 1,
     "size": "1024x1024"
@@ -462,11 +589,15 @@ The worker is built with:
 
 The distributed rate limiting system:
 
-1. Uses IP address + endpoint as the key
-2. Tracks both request count and token count per minute
+1. Keys the bucket on a hash of the API key (IP headers are the fallback)
+2. Tracks both request count and token count in a 1-minute sliding window
 3. Stores data in Cloudflare KV with TTL
-4. Returns proper HTTP 429 responses with rate limit headers
+4. Returns HTTP 429 once either budget is spent
 5. Ensures consistency across all worker instances globally
+
+The counter is a read-modify-write against KV, which has no atomic
+increment, so concurrent requests for the same key can overshoot the limit
+slightly.
 
 ## Token Counting
 
@@ -477,8 +608,10 @@ Accurate token counting is implemented using the `gpt-tokenizer` library, which 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+4. Add tests — `npm test` must pass and coverage must stay at or above 80%
+   (`npm run test:coverage`)
+5. Run `npm run format` and `npm run check`
+6. Submit a pull request
 
 ## License
 
