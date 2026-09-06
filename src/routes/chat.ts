@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+
 import { ChatHandler } from "../handlers";
 import { authMiddleware } from "../middleware/auth";
 import { createRateLimitMiddleware } from "../middleware/rate-limit-hono";
@@ -13,7 +14,7 @@ app.post("/completions", authMiddleware, async (c) => {
   let body: ChatCompletionRequest;
   try {
     body = await c.req.json();
-  } catch (_error) {
+  } catch {
     throw new ValidationError("Invalid JSON in request body");
   }
 

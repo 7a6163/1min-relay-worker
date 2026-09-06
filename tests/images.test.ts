@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { ONE_MIN_ASSET_CDN_URL } from "../src/constants/config";
 import { toAssetUrl } from "../src/handlers/images";
 
@@ -6,7 +7,10 @@ describe("toAssetUrl", () => {
   it("turns an upstream result path into a fetchable URL", () => {
     // resultObject entries look like this — they are paths, not URLs.
     expect(
-      toAssetUrl("images/2026_09_03_08_53_47_947_456329.png", "https://cdn.test"),
+      toAssetUrl(
+        "images/2026_09_03_08_53_47_947_456329.png",
+        "https://cdn.test",
+      ),
     ).toBe("https://cdn.test/images/2026_09_03_08_53_47_947_456329.png");
   });
 

@@ -16,11 +16,4 @@ export class SimpleUTF8Decoder {
     // TextDecoder with stream: true handles incomplete sequences automatically
     return this.decoder.decode(chunk, { stream: !isLastChunk });
   }
-
-  reset(): void {
-    this.decoder = new TextDecoder("utf-8", {
-      fatal: false,
-      ignoreBOM: true,
-    });
-  }
 }

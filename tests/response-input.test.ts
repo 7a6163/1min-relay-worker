@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+
+import type { ResponseInputItem } from "../src/types/requests";
 import { ValidationError } from "../src/utils/errors";
 import { convertInputToMessages } from "../src/utils/response-input";
-import type { ResponseInputItem } from "../src/types/requests";
 
 describe("convertInputToMessages", () => {
   it("accepts an input item that omits the optional type field", () => {
@@ -82,9 +83,7 @@ describe("convertInputToMessages", () => {
   });
 
   it("prepends instructions as a system message", () => {
-    const input: ResponseInputItem[] = [
-      { role: "user", content: "question" },
-    ];
+    const input: ResponseInputItem[] = [{ role: "user", content: "question" }];
 
     expect(convertInputToMessages(input, "be brief")).toEqual([
       { role: "system", content: "be brief" },

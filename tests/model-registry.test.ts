@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { isUsableModel, usableModels } from "../src/services/model-registry";
 import type { OneMinModelEntry } from "../src/types/onemin-models";
 
@@ -25,7 +26,10 @@ describe("isUsableModel", () => {
     // e.g. black-forest-labs/flux-schnell, the relay's previous image default.
     expect(
       isUsableModel(
-        model({ modelId: "black-forest-labs/flux-schnell", status: "DISABLED" }),
+        model({
+          modelId: "black-forest-labs/flux-schnell",
+          status: "DISABLED",
+        }),
       ),
     ).toBe(false);
   });

@@ -28,6 +28,14 @@ import { writeSSEDone, writeSSEEventWithType } from "../utils/sse";
 import { executeStreamingPipeline } from "../utils/streaming";
 import { BaseTextHandler } from "./base";
 
+/** Keyed by string, not the enum: clients are not obliged to send a valid one. */
+const EFFORT_INSTRUCTIONS: Record<string, string> = {
+  low: "Provide a direct and concise response.",
+  medium:
+    "Think through the problem step by step and provide a well-reasoned response.",
+  high: "Carefully analyze all aspects of the problem, consider multiple perspectives, and provide a thoroughly reasoned response with detailed explanations.",
+};
+
 export class ResponseHandler extends BaseTextHandler {
   async handleResponsesWithBody(
     requestBody: ResponseRequest,
@@ -251,64 +259,73 @@ export class ResponseHandler extends BaseTextHandler {
     responseFormat?: ResponseFormat,
     reasoningEffort?: ResponseRequest["reasoning_effort"],
   ): Message[] {
-    const enhancedMessages = [...messages];
+    // `reasoning_effort` and `response_format` are independent fields: a
+    // request may carry either on its own, and the effort instruction used to
+    // be dropped whenever no response_format came with it.
+    const instructions: string[] = [];
 
     if (responseFormat) {
-      let structurePrompt = "";
-
       switch (responseFormat.type) {
         case "json_object":
-          structurePrompt =
-            "Please respond with a valid JSON object only. Do not include any text outside the JSON structure.";
+          instructions.push(
+            "Please respond with a valid JSON object only. Do not include any text outside the JSON structure.",
+          );
           break;
         case "json_schema":
           if (responseFormat.json_schema) {
-            structurePrompt = `Please respond with a valid JSON object that strictly follows this schema: ${JSON.stringify(responseFormat.json_schema.schema)}. The response should be named "${responseFormat.json_schema.name}". ${responseFormat.json_schema.description || ""}`;
+            instructions.push(
+              `Please respond with a valid JSON object that strictly follows this schema: ${JSON.stringify(responseFormat.json_schema.schema)}. The response should be named "${responseFormat.json_schema.name}". ${responseFormat.json_schema.description || ""}`,
+            );
           }
           break;
         default:
-          structurePrompt =
-            "Please provide a clear and structured text response.";
+          instructions.push(
+            "Please provide a clear and structured text response.",
+          );
           break;
       }
+    }
 
-      if (reasoningEffort) {
-        const effortInstructions: Record<string, string> = {
-          low: "Provide a direct and concise response.",
-          medium:
-            "Think through the problem step by step and provide a well-reasoned response.",
-          high: "Carefully analyze all aspects of the problem, consider multiple perspectives, and provide a thoroughly reasoned response with detailed explanations.",
-        };
-        structurePrompt += ` ${effortInstructions[reasoningEffort]}`;
+    if (reasoningEffort) {
+      // Looked up, not interpolated: an out-of-enum value from an untyped
+      // client would otherwise append the literal "undefined" to the prompt.
+      const effort = EFFORT_INSTRUCTIONS[reasoningEffort];
+      if (effort) {
+        instructions.push(effort);
       }
+    }
 
-      const systemMessageIndex = enhancedMessages.findIndex(
-        (msg) => msg.role === "system",
-      );
-      const existing = enhancedMessages[systemMessageIndex];
-      if (systemMessageIndex >= 0 && existing) {
-        const existingText =
-          typeof existing.content === "string"
+    if (instructions.length === 0) {
+      return messages;
+    }
+
+    const structurePrompt = instructions.join(" ");
+    const enhancedMessages = [...messages];
+    const systemMessageIndex = enhancedMessages.findIndex(
+      (msg) => msg.role === "system",
+    );
+    const existing = enhancedMessages[systemMessageIndex];
+    if (systemMessageIndex >= 0 && existing) {
+      const existingText =
+        typeof existing.content === "string"
+          ? existing.content
+          : Array.isArray(existing.content)
             ? existing.content
-            : Array.isArray(existing.content)
-              ? existing.content
-                  .filter(
-                    (c): c is { type: "text"; text: string } =>
-                      c.type === "text",
-                  )
-                  .map((c) => c.text)
-                  .join("\n")
-              : "";
-        enhancedMessages[systemMessageIndex] = {
-          role: existing.role,
-          content: `${existingText}\n\n${structurePrompt}`,
-        };
-      } else {
-        enhancedMessages.unshift({
-          role: "system",
-          content: structurePrompt,
-        });
-      }
+                .filter(
+                  (c): c is { type: "text"; text: string } => c.type === "text",
+                )
+                .map((c) => c.text)
+                .join("\n")
+            : "";
+      enhancedMessages[systemMessageIndex] = {
+        role: existing.role,
+        content: `${existingText}\n\n${structurePrompt}`,
+      };
+    } else {
+      enhancedMessages.unshift({
+        role: "system",
+        content: structurePrompt,
+      });
     }
 
     return enhancedMessages;
