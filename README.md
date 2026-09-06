@@ -1,6 +1,7 @@
 # 1min-relay Cloudflare Worker
 
 ![GitHub package.json version](https://img.shields.io/github/package-json/v/7a6163/1min-relay-worker)
+[![codecov](https://codecov.io/gh/7a6163/1min-relay-worker/graph/badge.svg)](https://codecov.io/gh/7a6163/1min-relay-worker)
 
 A TypeScript implementation of the 1min.ai API relay service, designed to run on Cloudflare Workers with distributed rate limiting and accurate token counting.
 
