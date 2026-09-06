@@ -225,35 +225,11 @@ export async function getModelData(env: Env): Promise<CachedModelData> {
 }
 
 /**
- * Check if a model exists in chat or image models
- */
-export async function isValidModel(model: string, env: Env): Promise<boolean> {
-  const data = await getModelData(env);
-  const speechIds = data.speechModelIds ?? FALLBACK_SPEECH_MODEL_IDS;
-  return (
-    data.chatModelIds.includes(model) ||
-    data.imageModelIds.includes(model) ||
-    speechIds.includes(model)
-  );
-}
-
-/**
  * Check if a model supports vision (modality.INPUT includes "image")
  */
 export async function isVisionModel(model: string, env: Env): Promise<boolean> {
   const data = await getModelData(env);
   return data.visionModelIds.includes(model);
-}
-
-/**
- * Check if a model supports code interpreter (CODE_GENERATOR feature)
- */
-export async function isCodeInterpreterModel(
-  model: string,
-  env: Env,
-): Promise<boolean> {
-  const data = await getModelData(env);
-  return data.codeInterpreterModelIds.includes(model);
 }
 
 /**
@@ -265,14 +241,6 @@ export async function isImageGenerationModel(
 ): Promise<boolean> {
   const data = await getModelData(env);
   return data.imageModelIds.includes(model);
-}
-
-/**
- * Check if a model is a chat model (all chat models support web search)
- */
-export async function isChatModel(model: string, env: Env): Promise<boolean> {
-  const data = await getModelData(env);
-  return data.chatModelIds.includes(model);
 }
 
 /**

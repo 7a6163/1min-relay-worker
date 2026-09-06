@@ -2,24 +2,7 @@
  * Image processing utilities
  */
 
-import type { ImageContent, MessageContent, TextContent } from "../types";
-
-/**
- * Checks if URL is an image URL
- * @param url - URL to check
- * @returns boolean - True if URL is an image URL
- */
-export function isImageUrl(url: string): boolean {
-  if (url.startsWith("data:image/")) return true;
-
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"];
-    return imageExtensions.some((ext) => pathname.endsWith(ext));
-  } catch {
-    return false;
-  }
-}
+import type { MessageContent } from "../types";
 
 /**
  * Extracts image URL from message content
@@ -149,18 +132,4 @@ export async function uploadImageToAsset(
   }
 
   return result.fileContent.path;
-}
-
-/**
- * Extracts text content from mixed content array
- * @param content - Mixed content array
- * @returns Combined text content
- */
-export function extractTextFromContent(
-  content: (TextContent | ImageContent)[],
-): string {
-  return content
-    .filter((item): item is TextContent => item.type === "text")
-    .map((item) => item.text)
-    .join("\n");
 }

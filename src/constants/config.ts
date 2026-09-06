@@ -66,14 +66,3 @@ export const FALLBACK_SPEECH_MODEL_IDS = [
   "medical_dictation",
   "medical_conversation",
 ];
-
-// API endpoints
-export const API_ENDPOINTS = {
-  CHAT_COMPLETIONS: "/v1/chat/completions",
-  RESPONSES: "/v1/responses",
-  MESSAGES: "/v1/messages",
-  IMAGES_GENERATIONS: "/v1/images/generations",
-  AUDIO_TRANSCRIPTIONS: "/v1/audio/transcriptions",
-  AUDIO_TRANSLATIONS: "/v1/audio/translations",
-  MODELS: "/v1/models",
-} as const;
