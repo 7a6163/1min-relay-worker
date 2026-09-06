@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -37,3 +37,26 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
           slug: 7a6163/1min-relay-worker
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # What actually ships to the Worker has to be clean.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      # Dev tooling (wrangler pulls in esbuild, sharp, undici, ws) never
+      # reaches the deployed Worker, and these advisories appear and get
+      # patched on someone else's schedule. Report them, do not gate on them.
+      - name: Audit dev dependencies
+        run: npm audit
+        continue-on-error: true
