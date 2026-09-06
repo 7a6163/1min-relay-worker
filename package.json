@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "gpt-tokenizer": "^3.4.0",
-    "hono": "^4.9.11"
+    "hono": "^4.13.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250701.0",
