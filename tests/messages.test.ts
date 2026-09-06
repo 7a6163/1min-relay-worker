@@ -3,6 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import app from "../src/index";
 import type { OneMinRequestBody } from "../src/types";
 import {
@@ -11,6 +12,7 @@ import {
   type FetchMock,
   installFetchMock,
   oneMinChatResponse,
+  requestTo,
   sseResponse,
   testCtx,
   testEnv,
@@ -49,7 +51,7 @@ function post(body: unknown) {
 }
 
 const prompt = () =>
-  (upstream.callsTo(UPSTREAM.chat)[0]?.body as OneMinRequestBody).promptObject
+  (requestTo(upstream, UPSTREAM.chat).body as OneMinRequestBody).promptObject
     .prompt as string;
 
 describe("non-streaming", () => {

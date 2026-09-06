@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { ONE_MIN_ASSET_CDN_URL } from "../src/constants/config";
 import { toAssetUrl } from "../src/handlers/images";
 

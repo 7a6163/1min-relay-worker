@@ -5,6 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { CachedModelData, Env } from "../src/types";
 import {
   CHAT_MODEL,

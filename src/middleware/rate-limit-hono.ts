@@ -1,4 +1,5 @@
 import { createMiddleware } from "hono/factory";
+
 import type { HonoEnv } from "../types/hono";
 import { RateLimitError } from "../utils/errors";
 import { RateLimiter } from "./rate-limit";

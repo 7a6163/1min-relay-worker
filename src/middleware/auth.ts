@@ -1,4 +1,5 @@
 import { createMiddleware } from "hono/factory";
+
 import type { HonoEnv } from "../types/hono";
 import { AuthenticationError } from "../utils/errors";
 

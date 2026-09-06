@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+
 import type { HonoEnv } from "../types/hono";
 
 const app = new Hono<HonoEnv>();

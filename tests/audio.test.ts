@@ -4,6 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import app from "../src/index";
 import type { OneMinRequestBody } from "../src/types";
 import {
@@ -16,6 +17,7 @@ import {
   type FetchMock,
   installFetchMock,
   oneMinChatResponse,
+  requestTo,
   SPEECH_MODEL,
   testCtx,
   testEnv,
@@ -66,7 +68,7 @@ function mockUpload(path = "audio/clip.mp3") {
 }
 
 const sentBody = () =>
-  upstream.callsTo(UPSTREAM.features)[0]?.body as OneMinRequestBody;
+  requestTo(upstream, UPSTREAM.features).body as OneMinRequestBody;
 
 describe("transcription", () => {
   it("uploads the file and returns JSON text", async () => {
@@ -262,17 +264,16 @@ describe("form data validation", () => {
     ).rejects.toThrow("Invalid response_format");
   });
 
-  it.each([
-    "nope",
-    "-1",
-    "2",
-  ])("rejects temperature %s", async (temperature) => {
-    await expect(
-      parseAudioFormData(
-        request(form({ file: mp3File(), model: SPEECH_MODEL, temperature })),
-      ),
-    ).rejects.toThrow("temperature must be a number");
-  });
+  it.each(["nope", "-1", "2"])(
+    "rejects temperature %s",
+    async (temperature) => {
+      await expect(
+        parseAudioFormData(
+          request(form({ file: mp3File(), model: SPEECH_MODEL, temperature })),
+        ),
+      ).rejects.toThrow("temperature must be a number");
+    },
+  );
 
   it("treats an empty temperature as absent", async () => {
     const parsed = await parseAudioFormData(

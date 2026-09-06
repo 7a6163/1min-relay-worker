@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import type { OneMinChatResponse } from "../src/types/responses";
 import { extractFinishReason, extractOneMinUsage } from "../src/utils/response";
 

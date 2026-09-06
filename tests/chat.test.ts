@@ -3,6 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import app from "../src/index";
 import type { OneMinRequestBody } from "../src/types";
 import {
@@ -12,6 +13,7 @@ import {
   IMAGE_MODEL,
   installFetchMock,
   oneMinChatResponse,
+  requestTo,
   sseResponse,
   testCtx,
   testEnv,
@@ -50,7 +52,7 @@ function post(body: unknown, env = testEnv()) {
 }
 
 const chatBody = () =>
-  upstream.callsTo(UPSTREAM.chat)[0]?.body as OneMinRequestBody | undefined;
+  requestTo(upstream, UPSTREAM.chat).body as OneMinRequestBody;
 
 describe("non-streaming", () => {
   it("translates a completion into OpenAI shape", async () => {
@@ -90,10 +92,11 @@ describe("non-streaming", () => {
       model: CHAT_MODEL,
       promptObject: { prompt: "System: be nice\n\nHuman: hi\n\n" },
     });
-    const call = upstream.callsTo(UPSTREAM.chat)[0];
-    expect((call?.init.headers as Record<string, string>)["API-KEY"]).toBe(
-      "test-key",
-    );
+    const headers = requestTo(upstream, UPSTREAM.chat).init.headers as Record<
+      string,
+      string
+    >;
+    expect(headers["API-KEY"]).toBe("test-key");
   });
 
   it("estimates usage locally when the upstream reports none", async () => {
@@ -140,7 +143,7 @@ describe("non-streaming", () => {
   it("falls back to the default model when none is given", async () => {
     upstream.reply(UPSTREAM.chat, () => oneMinChatResponse("ok"));
     await post({ messages: [{ role: "user", content: "hi" }] });
-    expect(chatBody()?.model).toBe(CHAT_MODEL);
+    expect(chatBody().model).toBe(CHAT_MODEL);
   });
 
   it("flattens tool and assistant turns into the prompt", async () => {
@@ -153,7 +156,7 @@ describe("non-streaming", () => {
         { role: "tool", content: "42" },
       ],
     });
-    expect(chatBody()?.promptObject.prompt).toBe(
+    expect(chatBody().promptObject.prompt).toBe(
       "Human: hi\n\nAssistant: hello\n\nTool: 42\n\n",
     );
   });
@@ -215,7 +218,7 @@ describe("web search", () => {
       model: `${CHAT_MODEL}:online`,
       messages: [{ role: "user", content: "hi" }],
     });
-    expect(chatBody()?.promptObject.settings?.webSearchSettings).toEqual({
+    expect(chatBody().promptObject.settings?.webSearchSettings).toEqual({
       webSearch: true,
       numOfSite: 1,
       maxWord: 500,
@@ -231,7 +234,7 @@ describe("web search", () => {
       },
       testEnv({ WEB_SEARCH_NUM_OF_SITE: "3", WEB_SEARCH_MAX_WORD: "900" }),
     );
-    expect(chatBody()?.promptObject.settings?.webSearchSettings).toMatchObject({
+    expect(chatBody().promptObject.settings?.webSearchSettings).toMatchObject({
       numOfSite: 3,
       maxWord: 900,
     });
@@ -252,7 +255,8 @@ describe("web search", () => {
     });
 
     expect(res.status).toBe(200);
-    const retry = upstream.callsTo(UPSTREAM.chat)[1]?.body as OneMinRequestBody;
+    const retry = requestTo(upstream, UPSTREAM.chat, 1)
+      .body as OneMinRequestBody;
     expect(retry.promptObject.settings?.webSearchSettings).toEqual({
       webSearch: false,
     });
@@ -306,7 +310,7 @@ describe("vision", () => {
 
     const res = await post(imageMessage(VISION_MODEL));
     expect(res.status).toBe(200);
-    expect(chatBody()?.promptObject.attachments).toEqual({
+    expect(chatBody().promptObject.attachments).toEqual({
       images: ["images/abc.png"],
     });
     expect(upstream.callsTo(UPSTREAM.asset)).toHaveLength(1);

@@ -4,6 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { getClientId, RateLimiter } from "../src/middleware/rate-limit";
 import type { Message, OneMinChatResponse } from "../src/types";
 import {

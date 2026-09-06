@@ -4,6 +4,7 @@
  */
 
 import { vi } from "vitest";
+
 import type { Env, OneMinModelEntry } from "../src/types";
 
 export const UPSTREAM = {
@@ -143,6 +144,23 @@ export function installFetchMock(): FetchMock {
       handlers.push((url) => (url.startsWith(prefix) ? response() : undefined)),
     callsTo: (prefix) => calls.filter((c) => c.url.startsWith(prefix)),
   };
+}
+
+/**
+ * The nth request sent to `prefix`, failing loudly when it never happened —
+ * `callsTo(...)[n]` is `T | undefined`, and casting that away turns a missing
+ * request into an unreadable TypeError three lines later.
+ */
+export function requestTo(
+  mock: FetchMock,
+  prefix: string,
+  index = 0,
+): UpstreamCall {
+  const call = mock.callsTo(prefix)[index];
+  if (!call) {
+    throw new Error(`expected at least ${index + 1} request(s) to ${prefix}`);
+  }
+  return call;
 }
 
 /** A non-streaming chat/audio record as 1min.ai returns it. */

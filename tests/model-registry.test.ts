@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { isUsableModel, usableModels } from "../src/services/model-registry";
 import type { OneMinModelEntry } from "../src/types/onemin-models";
 

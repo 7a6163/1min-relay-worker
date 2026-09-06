@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+
 import type { HonoEnv } from "../types/hono";
 import audioRoutes from "./audio";
 import chatRoutes from "./chat";

@@ -4,6 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { calculateTokens } from "../src/utils/tokens";
 
 vi.mock("gpt-tokenizer", () => ({

@@ -3,6 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import app from "../src/index";
 import type { OneMinRequestBody } from "../src/types";
 import {
@@ -10,6 +11,7 @@ import {
   type FetchMock,
   IMAGE_MODEL,
   installFetchMock,
+  requestTo,
   testCtx,
   testEnv,
   UPSTREAM,
@@ -52,7 +54,7 @@ function imageResult(paths: string[]) {
 }
 
 const sentBody = () =>
-  upstream.callsTo(UPSTREAM.features)[0]?.body as OneMinRequestBody;
+  requestTo(upstream, UPSTREAM.features).body as OneMinRequestBody;
 
 describe("generation", () => {
   it("turns result paths into CDN URLs", async () => {

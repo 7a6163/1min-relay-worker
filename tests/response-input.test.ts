@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import type { ResponseInputItem } from "../src/types/requests";
 import { ValidationError } from "../src/utils/errors";
 import { convertInputToMessages } from "../src/utils/response-input";
@@ -33,22 +34,21 @@ describe("convertInputToMessages", () => {
     ]);
   });
 
-  it.each([
-    "text",
-    "input_text",
-    "output_text",
-  ])("extracts text from a %s content part", (partType) => {
-    const input: ResponseInputItem[] = [
-      {
-        role: "user",
-        content: [{ type: partType, text: "part text" }],
-      },
-    ];
+  it.each(["text", "input_text", "output_text"])(
+    "extracts text from a %s content part",
+    (partType) => {
+      const input: ResponseInputItem[] = [
+        {
+          role: "user",
+          content: [{ type: partType, text: "part text" }],
+        },
+      ];
 
-    expect(convertInputToMessages(input)).toEqual([
-      { role: "user", content: "part text" },
-    ]);
-  });
+      expect(convertInputToMessages(input)).toEqual([
+        { role: "user", content: "part text" },
+      ]);
+    },
+  );
 
   it("joins multiple text parts with newlines", () => {
     const input: ResponseInputItem[] = [

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { parseSSEChunks } from "../src/utils/streaming";
 
 // Wire format captured from a live 1min.ai streaming response.
