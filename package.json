@@ -31,11 +31,11 @@
     "@cloudflare/workers-types": "^4.20250701.0",
     "@types/node": "^24.10.1",
     "@types/service-worker-mock": "^2.0.4",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^5.0.0",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.0",
     "wrangler": "^4.24.3"
   }
 }
