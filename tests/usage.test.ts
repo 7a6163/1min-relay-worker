@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OneMinChatResponse } from "../src/types/responses";
-import {
-  extractFinishReason,
-  extractOneMinUsage,
-} from "../src/utils/response";
+import { extractFinishReason, extractOneMinUsage } from "../src/utils/response";
 
 // Shape captured from a live 1min.ai chat response.
 const LIVE_METADATA = {
@@ -18,9 +15,7 @@ const LIVE_METADATA = {
   executionTime: 0.365,
 };
 
-function response(
-  metadata?: Record<string, unknown>,
-): OneMinChatResponse {
+function response(metadata?: Record<string, unknown>): OneMinChatResponse {
   return {
     aiRecord: {
       ...(metadata ? { metadata } : {}),
@@ -46,9 +41,7 @@ describe("extractOneMinUsage", () => {
   it("returns null when metadata carries no token counts", () => {
     // Image records put moderation info here; TTS records leave it empty.
     expect(
-      extractOneMinUsage(
-        response({ resultModeration: { status: "unknown" } }),
-      ),
+      extractOneMinUsage(response({ resultModeration: { status: "unknown" } })),
     ).toBeNull();
     expect(extractOneMinUsage(response({}))).toBeNull();
   });
@@ -139,7 +132,9 @@ describe("extractFinishReason", () => {
     // The reason matters most exactly when the counts are absent or zero, so it
     // is read straight off the record instead of through the usage helper.
     const record = {
-      aiRecord: { metadata: { inputToken: 0, outputToken: 0, finishReason: "length" } },
+      aiRecord: {
+        metadata: { inputToken: 0, outputToken: 0, finishReason: "length" },
+      },
     } as never;
     expect(extractOneMinUsage(record)).toBeNull();
     expect(extractFinishReason(record)).toBe("length");

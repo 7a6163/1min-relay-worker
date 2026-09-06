@@ -31,3 +31,8 @@ worker/
 *.tsbuildinfo
 *.d.ts
 
+
+# Wrangler local secrets
+.dev.vars
+.dev.vars.*
+coverage/

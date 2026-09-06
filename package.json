@@ -7,11 +7,12 @@
     "build": "tsc",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
-    "format": "biome check --write src/",
-    "lint": "biome lint src/",
-    "check": "biome check src/",
+    "format": "biome check --write .",
+    "lint": "biome lint .",
+    "check": "biome check .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "cloudflare",
@@ -27,6 +28,7 @@
     "@cloudflare/workers-types": "^4.20250701.0",
     "@types/node": "^24.10.1",
     "@types/service-worker-mock": "^2.0.4",
+    "@vitest/coverage-v8": "^4.1.11",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11",
     "wrangler": "^4.24.3"

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { ResponseInputItem } from "../src/types/requests";
 import { ValidationError } from "../src/utils/errors";
 import { convertInputToMessages } from "../src/utils/response-input";
-import type { ResponseInputItem } from "../src/types/requests";
 
 describe("convertInputToMessages", () => {
   it("accepts an input item that omits the optional type field", () => {
@@ -33,21 +33,22 @@ describe("convertInputToMessages", () => {
     ]);
   });
 
-  it.each(["text", "input_text", "output_text"])(
-    "extracts text from a %s content part",
-    (partType) => {
-      const input: ResponseInputItem[] = [
-        {
-          role: "user",
-          content: [{ type: partType, text: "part text" }],
-        },
-      ];
+  it.each([
+    "text",
+    "input_text",
+    "output_text",
+  ])("extracts text from a %s content part", (partType) => {
+    const input: ResponseInputItem[] = [
+      {
+        role: "user",
+        content: [{ type: partType, text: "part text" }],
+      },
+    ];
 
-      expect(convertInputToMessages(input)).toEqual([
-        { role: "user", content: "part text" },
-      ]);
-    },
-  );
+    expect(convertInputToMessages(input)).toEqual([
+      { role: "user", content: "part text" },
+    ]);
+  });
 
   it("joins multiple text parts with newlines", () => {
     const input: ResponseInputItem[] = [
@@ -82,9 +83,7 @@ describe("convertInputToMessages", () => {
   });
 
   it("prepends instructions as a system message", () => {
-    const input: ResponseInputItem[] = [
-      { role: "user", content: "question" },
-    ];
+    const input: ResponseInputItem[] = [{ role: "user", content: "question" }];
 
     expect(convertInputToMessages(input, "be brief")).toEqual([
       { role: "system", content: "be brief" },
