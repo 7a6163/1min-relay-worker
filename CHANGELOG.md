@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-09-06
+
+Backport of the fixes from PipperL/1min-relay-worker, each one verified against
+the live 1min.ai API before being taken.
+
+### Fixed
+- **Token usage was always 0/0/0**: the handlers read `data.usage`, which the upstream response does not have. The accounting lives in `aiRecord.metadata.{inputToken,outputToken,totalToken}`; a local estimate is used only when the record carries no counts (image records, and the occasional all-zero metadata seen in production).
+- **Streaming failures were reported as successful empty completions**: a failed streaming request is answered with HTTP 200 and an in-stream `event: error`, which the SSE parser skipped along with every other non-content event. A bad model name looked like a model that declined to answer.
+- **Image generation with the default model failed outright**: `black-forest-labs/flux-schnell` is listed by the models API but reports `status: "DISABLED"` and is rejected upstream with 400 UNSUPPORTED_MODEL.
+- **Image results were S3 paths, not URLs**: `resultObject` was handed to clients verbatim as `data[].url`. The signed `temporaryUrl` covers only the first result, so `n > 1` left the rest with no URL at all; URLs are now built against the public asset CDN (overridable with `ONE_MIN_ASSET_CDN_URL`).
+- **Models requiring `quality` were unusable**: the field was never sent and never accepted from the client, so `gpt-image-1-mini` and friends answered 400 MISSING_REQUIRED_FIELDS.
+- **`/v1/responses` dropped input items that omit `type`**: the field is an omittable default in the OpenAI spec, so clients sending only `role` + `content` — the n8n OpenAI node among them — had every message discarded and the upstream received an empty prompt. `input_text` and `output_text` content parts are now accepted too.
+- **Upstream error detail was discarded**: every failure was replaced with one generic sentence. The upstream's `message` is sometimes a canned line that misleads ("the service is a bit busy") while `details` holds the real reason; `errorCode` and the `details` messages are now forwarded, credential failures and 5xx excepted.
+- **`finish_reason` could fall outside OpenAI's closed set**: the upstream forwards each provider's own wording (Cohere answers "complete"), which makes a strictly-typed client fail to parse an otherwise fine response.
+- **`/v1/messages` streaming errors were unparseable**: the shared pipeline emitted an OpenAI-shaped error frame with no event name, so an Anthropic client saw the stream stop mid-message with no `message_stop`.
+
+### Changed
+- Default image model is now `gpt-image-1-mini`.
+- `/v1/models` no longer lists models the upstream reports as `DISABLED`. `deprecationDate` is deliberately not filtered on: every dated entry is ACTIVE, answers today, and shares a batch date weeks out, which reads as a renewal marker rather than an end of life.
+- `/v1/responses` answers 400 for unsupported content parts and for input that yields no message content, instead of silently sending a truncated or empty prompt.
+- `response_format: "b64_json"` on image generation is rejected explicitly rather than answered with URLs.
+
+### Added
+- Vitest test suite (62 tests), run in CI.
+
 ## [5.0.2] - 2026-06-12
 
 ### Removed
