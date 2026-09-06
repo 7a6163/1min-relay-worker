@@ -15,6 +15,10 @@ export class RateLimiter {
     this.config = config;
   }
 
+  // ponytail: read-modify-write on KV, so concurrent requests for the same
+  // client can read the same counter and overshoot the limit by roughly the
+  // number of in-flight requests. KV has no atomic increment; move the counter
+  // into a Durable Object if the limit ever needs to be exact.
   async checkRateLimit(
     clientId: string,
     tokenCount: number = 0,

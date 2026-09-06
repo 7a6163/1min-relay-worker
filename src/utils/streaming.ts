@@ -260,6 +260,21 @@ export function executeStreamingPipeline(
         }
       }
 
+      // Flush any bytes the decoder was holding back mid-sequence
+      buffer += utf8Decoder.decode(new Uint8Array(), true);
+
+      if (detectedSSE === null && buffer) {
+        // The stream ended before a single "\n\n" ever arrived, so format
+        // detection never ran. Dropping the buffer here silently returned an
+        // empty answer for every short raw-text response.
+        detectedSSE = isSSEFormat(buffer);
+        if (!detectedSSE) {
+          accumulatedContent += buffer;
+          await callbacks.onChunk(writer, buffer);
+          buffer = "";
+        }
+      }
+
       // Process any remaining buffer (SSE mode only)
       if (detectedSSE && buffer.trim()) {
         accumulatedContent = await processSSEBlock(
