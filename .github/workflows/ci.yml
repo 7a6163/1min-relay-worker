@@ -9,19 +9,16 @@ on:
 jobs:
   lint-and-check:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # Every currently supported LTS line, plus 26 which enters LTS on
-        # 2026-10-28 and is what the toolchain floor (vitest) already allows.
-        node: [22, 24, 26]
-    name: lint-and-check (node ${{ matrix.node }})
     steps:
       - uses: actions/checkout@v7
 
+      # Node only runs the toolchain here — the Worker itself runs on
+      # workerd, pinned by wrangler and `compatibility_date`. One active-LTS
+      # line is enough; `engines` in package.json states the supported range
+      # for contributors.
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 24
           cache: npm
 
       - run: npm ci
@@ -39,7 +36,6 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
-        if: matrix.node == 24
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
