@@ -21,6 +21,8 @@ export interface ChatCompletionRequest {
   temperature?: number;
   max_tokens?: number;
   stream?: boolean;
+  // Rejected with 400: the upstream has no tool-calling mechanism.
+  tools?: unknown[];
 }
 
 export interface ImageGenerationRequest {
@@ -28,6 +30,11 @@ export interface ImageGenerationRequest {
   prompt: string;
   n?: number;
   size?: string;
+  /** Required by some upstream models (e.g. gpt-image-1-mini) */
+  quality?: string;
+  /** Accepted for SDK compatibility; only "url" is supported */
+  response_format?: string;
+  user?: string;
 }
 
 export interface JSONSchema {
@@ -70,7 +77,10 @@ export interface ResponseRequest {
 }
 
 export interface ResponseInputItem {
-  type: "message";
+  // Optional per the OpenAI Responses API spec: an item carrying only
+  // `role` + `content` is implicitly a message item. Many clients (e.g. the
+  // n8n OpenAI node) omit it.
+  type?: string;
   role: "user" | "assistant" | "system";
   content: string | Array<{ type: string; text?: string }>;
 }

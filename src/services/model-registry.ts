@@ -12,7 +12,9 @@ import { ApiError } from "../utils/errors";
 
 const MEMORY_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const KV_TTL_SECONDS = 60 * 60; // 1 hour
-const KV_KEY = "model-data";
+// Bumped whenever the cached shape or the filtering changes, so entries written
+// by an older version are not reused.
+const KV_KEY = "model-data-v2";
 const FETCH_TIMEOUT_MS = 5000;
 
 // Module-level in-memory cache
@@ -34,49 +36,73 @@ function isValidCachedData(data: unknown): data is CachedModelData {
   );
 }
 
+/**
+ * The models API lists entries the account cannot actually use: `status` can be
+ * "DISABLED". Requests for those are rejected upstream with 400
+ * UNSUPPORTED_MODEL, so they must not reach the client model list or pass
+ * model validation.
+ *
+ * `deprecationDate` is deliberately not part of this check. Measured against
+ * the live API: every dated entry is ACTIVE with a date weeks or months out,
+ * and the dates arrive in batches shared by unrelated models (2026-10-21
+ * covers gpt-4-turbo, gpt-3.5-turbo, o3-mini and gpt-4.1-nano at once), which
+ * reads as a renewal marker rather than a per-model end of life. Filtering on
+ * it would drop 14 models that answer today — the gpt-5 family among them —
+ * on dates the upstream never treated as an end of life. The one model
+ * confirmed unusable, black-forest-labs/flux-schnell, is flagged by `status`
+ * and carries no deprecation date at all.
+ */
+export function isUsableModel(model: OneMinModelEntry): boolean {
+  return model.status === "ACTIVE";
+}
+
+/**
+ * Filtering that removes *everything* means the upstream changed `status`, not
+ * that the account lost every model. Serving the unfiltered list beats 404ing
+ * every request for a whole cache TTL.
+ */
+export function usableModels(models: OneMinModelEntry[]): OneMinModelEntry[] {
+  const usable = models.filter(isUsableModel);
+  return usable.length > 0 ? usable : models;
+}
+
 function processModels(
   chatModels: OneMinModelEntry[],
   imageModels: OneMinModelEntry[],
   speechModels: OneMinModelEntry[],
 ): CachedModelData {
+  const usableChat = usableModels(chatModels);
+  const usableImage = usableModels(imageModels);
+  const usableSpeech = usableModels(speechModels);
+
   // Deduplicate by modelId (chat models take priority)
   const seen = new Set<string>();
   const allEntries: OneMinModelEntry[] = [];
 
-  for (const model of chatModels) {
-    if (!seen.has(model.modelId)) {
-      seen.add(model.modelId);
-      allEntries.push(model);
-    }
-  }
-  for (const model of imageModels) {
-    if (!seen.has(model.modelId)) {
-      seen.add(model.modelId);
-      allEntries.push(model);
-    }
-  }
-  for (const model of speechModels) {
-    if (!seen.has(model.modelId)) {
-      seen.add(model.modelId);
-      allEntries.push(model);
+  for (const group of [usableChat, usableImage, usableSpeech]) {
+    for (const model of group) {
+      if (!seen.has(model.modelId)) {
+        seen.add(model.modelId);
+        allEntries.push(model);
+      }
     }
   }
 
-  const chatModelIds = chatModels.map((m) => m.modelId);
-  const imageModelIds = imageModels.map((m) => m.modelId);
+  const chatModelIds = usableChat.map((m) => m.modelId);
+  const imageModelIds = usableImage.map((m) => m.modelId);
 
-  const visionModelIds = chatModels
+  const visionModelIds = usableChat
     .filter((m) => m.modality?.INPUT?.includes("image"))
     .map((m) => m.modelId);
 
-  const codeInterpreterModelIds = chatModels
+  const codeInterpreterModelIds = usableChat
     .filter((m) => m.features.includes("CODE_GENERATOR"))
     .map((m) => m.modelId);
 
-  // Use API-fetched speech models, falling back to hardcoded list if empty
+  // Use API-fetched models, falling back to hardcoded lists if empty
   const speechModelIds =
-    speechModels.length > 0
-      ? speechModels.map((m) => m.modelId)
+    usableSpeech.length > 0
+      ? usableSpeech.map((m) => m.modelId)
       : [...FALLBACK_SPEECH_MODEL_IDS];
 
   return {

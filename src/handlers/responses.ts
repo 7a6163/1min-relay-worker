@@ -9,16 +9,17 @@ import type {
   Message,
   OneMinChatResponse,
   ResponseFormat,
-  ResponseInputItem,
   ResponseRequest,
   ResponsesAPIResponse,
   ResponsesOutputMessage,
 } from "../types";
 import {
   calculateTokens,
+  convertInputToMessages,
   createSuccessResponse,
   estimateInputTokens,
   extractOneMinContent,
+  extractOneMinUsage,
   ValidationError,
   validateModelAndMessages,
   type WebSearchConfig,
@@ -46,7 +47,7 @@ export class ResponseHandler extends BaseTextHandler {
     // Convert input format to messages format
     let messages: Message[];
     if (requestBody.input) {
-      messages = this.convertInputToMessages(
+      messages = convertInputToMessages(
         requestBody.input,
         requestBody.instructions,
       );
@@ -87,41 +88,6 @@ export class ResponseHandler extends BaseTextHandler {
     );
   }
 
-  private convertInputToMessages(
-    input: string | ResponseInputItem[],
-    instructions?: string,
-  ): Message[] {
-    const messages: Message[] = [];
-
-    // Add instructions as system message
-    if (instructions) {
-      messages.push({ role: "system", content: instructions });
-    }
-
-    if (typeof input === "string") {
-      messages.push({ role: "user", content: input });
-    } else {
-      // Array of input items
-      for (const item of input) {
-        if (item.type === "message") {
-          const content =
-            typeof item.content === "string"
-              ? item.content
-              : item.content
-                  .filter(
-                    (c): c is typeof c & { text: string } =>
-                      c.type === "text" && !!c.text,
-                  )
-                  .map((c) => c.text)
-                  .join("\n");
-          messages.push({ role: item.role, content });
-        }
-      }
-    }
-
-    return messages;
-  }
-
   private async handleNonStreamingResponse(
     messages: Message[],
     model: string,
@@ -147,6 +113,7 @@ export class ResponseHandler extends BaseTextHandler {
       data,
       model,
       responseFormat,
+      enhancedMessages,
     );
     return createSuccessResponse(responsesAPIResponse);
   }
@@ -351,6 +318,7 @@ export class ResponseHandler extends BaseTextHandler {
     data: OneMinChatResponse,
     model: string,
     responseFormat?: ResponseFormat,
+    messages: Message[] = [],
   ): ResponsesAPIResponse {
     let content = extractOneMinContent(data);
 
@@ -370,6 +338,14 @@ export class ResponseHandler extends BaseTextHandler {
 
     const messageId = `msg-${crypto.randomUUID()}`;
 
+    // Prefer the upstream's own accounting (aiRecord.metadata) over a local
+    // estimate; the relay used to read a `usage` field the upstream never
+    // sends, so every response reported zero tokens.
+    const usage = extractOneMinUsage(data);
+    const inputTokens = usage?.promptTokens ?? estimateInputTokens(messages);
+    const outputTokens =
+      usage?.completionTokens ?? calculateTokens(content, model);
+
     return {
       id: `resp-${crypto.randomUUID()}`,
       object: "response",
@@ -386,9 +362,9 @@ export class ResponseHandler extends BaseTextHandler {
       ],
       status: "completed",
       usage: {
-        input_tokens: data.usage?.prompt_tokens || 0,
-        output_tokens: data.usage?.completion_tokens || 0,
-        total_tokens: data.usage?.total_tokens || 0,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        total_tokens: usage?.totalTokens ?? inputTokens + outputTokens,
       },
     };
   }

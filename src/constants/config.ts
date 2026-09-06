@@ -11,7 +11,23 @@ export const RATE_LIMIT_CONFIG = {
 
 // Default model configuration
 export const DEFAULT_MODEL = "open-mistral-nemo";
-export const DEFAULT_IMAGE_MODEL = "black-forest-labs/flux-schnell";
+// NOTE: black-forest-labs/flux-schnell used to be the default, but the upstream
+// models API reports it as status "DISABLED" and rejects requests for it with
+// 400 UNSUPPORTED_MODEL.
+export const DEFAULT_IMAGE_MODEL = "gpt-image-1-mini";
+
+// Public CDN serving the assets that `resultObject` paths refer to.
+// An upstream response's `temporaryUrl` is a signed URL for the *first* result
+// only, so multi-image responses need a URL we can build for the rest.
+export const ONE_MIN_ASSET_CDN_URL = "https://asset.1min.ai";
+
+// Some image models reject a request that omits `quality`
+export const IMAGE_MODELS_REQUIRING_QUALITY = new Set([
+  "gpt-image-1",
+  "gpt-image-1-mini",
+  "gpt-image-2",
+]);
+export const DEFAULT_IMAGE_QUALITY = "low";
 
 // Fixed token estimate for non-text requests (audio, image) in rate limiting
 export const MEDIA_REQUEST_TOKEN_ESTIMATE = 1000;

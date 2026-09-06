@@ -17,6 +17,7 @@ import {
   calculateTokens,
   estimateInputTokens,
   extractOneMinContent,
+  extractOneMinUsage,
   ValidationError,
   validateModelAndMessages,
   type WebSearchConfig,
@@ -229,6 +230,12 @@ export class MessagesHandler extends BaseTextHandler {
           type: "message_stop",
         });
       },
+      onError: async (writer, error) => {
+        await writeSSEEventWithType(writer, "error", {
+          type: "error",
+          error: { type: error.type, message: error.message },
+        });
+      },
     });
   }
 
@@ -239,10 +246,10 @@ export class MessagesHandler extends BaseTextHandler {
   ): AnthropicMessageResponse {
     const content = extractOneMinContent(data);
 
-    const inputTokens =
-      data.usage?.prompt_tokens || estimateInputTokens(messages);
+    const usage = extractOneMinUsage(data);
+    const inputTokens = usage?.promptTokens ?? estimateInputTokens(messages);
     const outputTokens =
-      data.usage?.completion_tokens || calculateTokens(content, model);
+      usage?.completionTokens ?? calculateTokens(content, model);
 
     return {
       id: `msg_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`,

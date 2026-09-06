@@ -25,18 +25,24 @@ export interface PromptAttachments {
 }
 
 export interface OneMinPromptObject {
-  prompt: string;
+  /** Required by chat and image features; text-to-speech uses `text` instead */
+  prompt?: string;
   settings?: PromptSettings;
   attachments?: PromptAttachments;
   conversationId?: string;
   // Legacy fields used by non-chat features (image generation)
   n?: number;
   size?: string;
+  quality?: string;
   // Audio (Speech-to-Text / Audio Translator) fields
   audioUrl?: string;
   response_format?: string; // snake_case: matches 1min.ai API field name
   temperature?: number;
   language?: string;
+  // Text-to-Speech fields
+  text?: string;
+  voice?: string;
+  speed?: number;
 }
 
 export interface OneMinRequestBody {
