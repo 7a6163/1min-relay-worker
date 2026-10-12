@@ -3,6 +3,12 @@
 ![GitHub package.json version](https://img.shields.io/github/package-json/v/7a6163/1min-relay-worker)
 [![codecov](https://codecov.io/gh/7a6163/1min-relay-worker/graph/badge.svg)](https://codecov.io/gh/7a6163/1min-relay-worker)
 
+> [!IMPORTANT]
+> **This project is archived and no longer maintained.** 1min.ai now offers an
+> [official OpenAI-compatible API](https://docs.1min.ai/docs/api/openai-compatible)
+> at `https://api.1min.ai/openai/v1` with native tool calling, which this relay
+> cannot provide. Use that instead. The code below stays available as-is.
+
 A TypeScript implementation of the 1min.ai API relay service, designed to run on Cloudflare Workers with distributed rate limiting and accurate token counting.
 
 ## Features
